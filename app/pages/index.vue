@@ -1,6 +1,7 @@
 <template>
 	<div>
 		<TrackerMap />
+		<TrackerVehicle />
 	</div>
 </template>
 

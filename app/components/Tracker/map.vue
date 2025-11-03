@@ -1,4 +1,3 @@
-i
 <template>
 	<div style="height: 100vh; width: 100vw">
 		<LMap
@@ -18,11 +17,27 @@ i
 				:radius="4500"
 				:color="'red'"
 			/>
+			<LGeoJson
+				:geojson="geojson"
+				:options-style="geoStyler"
+			/>
 		</LMap>
 	</div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 const zoom = ref(6);
+
+const geojson = ref(undefined);
+const geoStyler = (feature) => ({
+	opacity: feature.properties.code / 100000,
+});
+
+onMounted(async () => {
+	const response = await fetch(
+		'https://rawgit.com/gregoiredavid/france-geojson/master/regions/pays-de-la-loire/communes-pays-de-la-loire.geojson'
+	);
+	geojson.value = await response.json();
+});
 </script>
