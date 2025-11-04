@@ -6,17 +6,34 @@
 			</UCard>
 		</div>
 		<UCard class="data-container">
-			<div v-if="selectedVehicle">
-				<h3>Vehicle {{ selectedVehicle.id }}</h3>
-				<p>Speed: {{ selectedVehicle.currentData.speed.toFixed(1) }} km/h</p>
-				<p>Fuel: {{ selectedVehicle.currentData.fuelLevel.toFixed(0) }}%</p>
-			</div>
+			<template v-if="selectedVehicle">
+				<div class="card-title">Speed</div>
+				<ChartsSpeedGauge :current-speed="selectedVehicle.currentData.speed" />
+			</template>
 		</UCard>
-		<UCard class="data-container"> </UCard>
-		<UCard class="data-container"> </UCard>
-		<UCard class="data-container"> </UCard>
+		<UCard class="data-container">
+			<div class="card-title">Odometer Reading</div>
+			<ChartsOdometerLine :odometer-series="odometerSeries" />
+		</UCard>
+		<UCard class="data-container">
+			<div class="card-title">Engine Temperatures</div>
+			<ChartsEngineTempsLine
+				:oil-series="oilSeries"
+				:coolant-series="coolantSeries"
+			/>
+		</UCard>
+		<UCard class="data-container">
+			<div class="card-title">Emergency Light Status</div>
+			<ChartsEmergencyTimeline :lights-series="lightsSeries" />
+		</UCard>
 
-		<UCard class="temp-data-container"> </UCard>
+		<UCard class="temp-data-container">
+			<div class="card-title">Fuel Level & Consumption</div>
+			<ChartsSpeedConsumptionLine
+				:fuel-series="fuelSeries"
+				:consumption-series="consumptionSeries"
+			/>
+		</UCard>
 	</div>
 </template>
 
@@ -26,6 +43,11 @@ import type { Vehicle } from '~~/shared/types/vehicle';
 import { useVehicles } from '~/composables/useVehicles';
 import { telemetryToSeries, booleanSeries } from '~/lib/util/data-to-series';
 import type { DataRecord } from '~~/shared/types/data';
+import ChartsSpeedGauge from '~/components/Charts/SpeedGauge.vue';
+import ChartsEngineTempsLine from '~/components/Charts/EngineTempsLine.vue';
+import ChartsSpeedConsumptionLine from '~/components/Charts/SpeedConsumptionLine.vue';
+import ChartsEmergencyTimeline from '~/components/Charts/EmergencyTimeline.vue';
+import ChartsOdometerLine from '~/components/Charts/OdometerLine.vue';
 
 const route = useRoute();
 const vehicleId = computed(() => String(route.params.id || ''));
@@ -67,6 +89,12 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	grid-template-rows: 1fr 1fr 1fr 1fr;
 	height: 100%;
 	min-height: 0;
+	gap: 0.5rem;
+}
+
+.card-title {
+	font-weight: 600;
+	padding: 0.5rem 0.75rem;
 }
 
 .data-container {
@@ -76,11 +104,37 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	grid-row: span 2;
 }
 
+.data-container :deep(.p-4),
+.data-container :deep(.sm\:p-6) {
+	height: 100%;
+	min-height: 0;
+	padding: 0.5rem;
+	display: grid;
+	grid-template-rows: auto 1fr;
+}
+
 .temp-data-container {
 	width: 100%;
 	height: 100%;
 	grid-row: 3 / 5;
 	grid-column: 3 /5;
+}
+
+.temp-data-container :deep(.p-4),
+.temp-data-container :deep(.sm\:p-6) {
+	height: 100%;
+	min-height: 0;
+	padding: 0.5rem;
+	display: grid;
+	grid-template-rows: auto 1fr;
+}
+
+.two-col {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.5rem;
+	height: 100%;
+	min-height: 0;
 }
 
 .map-component {
