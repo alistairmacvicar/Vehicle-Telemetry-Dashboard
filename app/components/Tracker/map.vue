@@ -5,6 +5,7 @@
 	>
 		<LMap
 			ref="map"
+			class="map-full"
 			:zoom="zoom"
 			:center="center"
 			:use-global-leaflet="false"
@@ -49,9 +50,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import type { Vehicle } from '../../../shared/types/vehicle';
 import ambulanceSvg from '~/assets/icons/MdiAmbulance.svg';
+import { useVehicles } from '~/composables/useVehicles';
+
+const props = defineProps<{ followVehicleId?: string }>();
 
 const zoom = ref(10);
 const center = ref<Coordinates>([-34.92855422964225, 138.59985851659752]);
@@ -62,26 +66,14 @@ const userPanned = ref(false);
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === 'dark');
 
-const { data: vehicles } = await useFetch<Vehicle[]>('/api/vehicles', {
-	method: 'GET',
-	query: {
-		id: 'all',
-	},
-});
+const { vehicles, startPolling, stopPolling, getVehicleById } = useVehicles();
 
-let timer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
-	timer = setInterval(() => {
-		refreshNuxtData();
-	}, 1000);
-
-	nextTick(() => {
-		map.value?.leafletObject?.invalidateSize();
-	});
+	startPolling();
 });
 
 onBeforeUnmount(() => {
-	if (timer) clearInterval(timer);
+	stopPolling();
 });
 
 function zoomIn() {
@@ -103,16 +95,41 @@ function onUserMoveStart() {
 
 watch(vehicles, (list) => {
 	if (!list || !followId.value || userPanned.value) return;
-	const v = list.find((x) => x.id === followId.value);
-	if (!v) return;
-	const c: [number, number] = [v.currentData.latitude, v.currentData.longitude];
-	center.value = c;
-	map.value?.leafletObject?.panTo(c);
+	const vehicles = list.find((v) => v.id === followId.value);
+	if (!vehicles) return;
+	center.value = [
+		vehicles.currentData.latitude,
+		vehicles.currentData.longitude,
+	];
+	map.value?.leafletObject?.panTo(center.value);
 });
+
+watch(
+	() => props.followVehicleId,
+	(id) => {
+		if (!id) return;
+		followId.value = id;
+		const vehicle = getVehicleById(id);
+		if (!vehicle) return;
+		center.value = [
+			vehicle.currentData.latitude,
+			vehicle.currentData.longitude,
+		];
+		zoomIn();
+		map.value?.leafletObject?.panTo(center.value);
+		userPanned.value = false;
+	},
+	{ immediate: true }
+);
 </script>
 
 <style scoped>
 .map-container {
+	width: 100%;
+	height: 100%;
+}
+
+.map-full {
 	width: 100%;
 	height: 100%;
 }
