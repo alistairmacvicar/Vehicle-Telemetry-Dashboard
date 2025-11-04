@@ -5,7 +5,7 @@ import type { FeatureCollection, LineString } from 'geojson';
 const CENTER = { latitude: -34.92855422964225, longitude: 138.59985851659752 };
 const RADIUS_KM = 90;
 const NUM_VEHICLES = 2;
-const TICK_RATE_MS = 1000;
+const TICK_RATE_MS = 2000;
 const TANK_CAPACITY_L = 93;
 const MAX_HISTORY = 3600;
 const EMERGENCY_MIN_HOLD_MS = 30_000;
@@ -129,8 +129,6 @@ function getRouteCoordinates(
 		| undefined;
 	return Array.isArray(coords) ? coords : [];
 }
-
-//
 
 function moveAlongRoute(vehicle: Vehicle, distance: number) {
 	const coords = getRouteCoordinates(vehicle.route.geoJSON);
@@ -424,13 +422,7 @@ async function tick(dtSec: number) {
 
 		if (vehicle.route.atEnd) vehicle.currentData.speed = 0;
 
-		console.log(
-			`[${vehicle.id}] Pos: (${vehicle.currentData.latitude.toFixed(
-				5
-			)}, ${vehicle.currentData.longitude.toFixed(5)}) Speed: ${vehicle.currentData.speed.toFixed(
-				1
-			)} km/h Fuel: ${vehicle.currentData.fuelLevel.toFixed(1)}%`
-		);
+		// logging disabled to reduce server overhead per tick
 	}
 }
 

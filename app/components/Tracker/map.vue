@@ -10,6 +10,8 @@
 			:center="center"
 			:use-global-leaflet="false"
 			@dragstart="onUserMoveStart"
+			@zoomstart="onZoomStart"
+			@zoomend="onZoomEnd"
 		>
 			<LTileLayer
 				:key="isDark ? 'dark' : 'light'"
@@ -23,17 +25,15 @@
 				v-for="vehicle in vehicles"
 				:key="vehicle.id"
 				:lat-lng="[vehicle.currentData.latitude, vehicle.currentData.longitude]"
-				@click="
-					followVehicle(vehicle);
-					zoomIn();
-				"
+				@click="followVehicle(vehicle)"
 			>
-				<LIcon
-					:icon-url="ambulanceSvg"
-					:icon-size="[50, 50]"
-					:icon-anchor="[25, 10]"
-					:class-name="isDark ? 'icon-dark' : 'icon-light'"
-				/>
+			<LIcon
+				:icon-url="ambulanceSvg"
+				:icon-size="[50, 50]"
+				:icon-anchor="[25, 10]"
+				:popup-anchor="[0, -30]"
+				:class-name="getIconClass(vehicle)"
+			/>
 				<LPopup
 					class="popup"
 					style="margin: 0"
@@ -63,13 +63,62 @@ const center = ref<Coordinates>([-34.92855422964225, 138.59985851659752]);
 const map = ref();
 const followId = ref<string | null>(null);
 const userPanned = ref(false);
+const isZooming = ref(false);
 
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === 'dark');
 
 const { vehicles, startPolling, stopPolling, getVehicleById } = useVehicles();
+//TODO: MAKE THIS GLOBAL IN THE APPLICATION/SERVER
+const POLL_INTERVAL_MS = 2000;
 
-// Style options for GeoJSON emergency route with animated class applied on element
+function nudgeIntoSafeBox() {
+	const m = map.value?.leafletObject;
+	if (!m || !followId.value || userPanned.value || isZooming.value) return;
+	const mapEl = m.getContainer();
+	const popupEl = mapEl.querySelector('.leaflet-popup') as HTMLElement | null;
+	const targetEl = (popupEl as HTMLElement | null) || (mapEl.querySelector('.is-followed') as HTMLElement | null);
+
+	if (!targetEl) return;
+
+	const mapRect = mapEl.getBoundingClientRect();
+	const tRect = targetEl.getBoundingClientRect();
+	const iconCx = tRect.left + tRect.width / 2;
+	const iconCy = tRect.top + tRect.height / 2;
+	const mapCx = mapRect.left + mapRect.width / 2;
+	const mapCy = mapRect.top + mapRect.height / 2;
+	const dx = iconCx - mapCx;
+	const dy = iconCy - mapCy;
+	const threshX = mapRect.width * 0.2;
+	const threshY = mapRect.height * 0.2;
+
+	if (Math.abs(dx) > threshX || Math.abs(dy) > threshY) {
+		const fx = 1; // move ~20% of the offset
+		const fy = 1;
+		m.panBy([dx * fx, dy * fy], { animate: true, duration: 1, easeLinearity: 0.3 });
+	}
+}
+
+function withNoMarkerTransitions(run: () => void) {
+	const m = map.value?.leafletObject;
+	const container = m?.getContainer?.();
+	if (!container) {
+		run();
+		return;
+	}
+	container.classList.add('no-marker-transition');
+	try {
+		run();
+	} finally {
+		requestAnimationFrame(() => container.classList.remove('no-marker-transition'));
+	}
+}
+
+function getIconClass(vehicle: Vehicle) {
+	const base = isDark.value ? 'icon-dark' : 'icon-light';
+	return vehicle.id === followId.value ? `${base} is-followed` : base;
+}
+
 const geoJsonOptions = {
 	style: () => ({
 		color: '#2563eb', // initial blue; animated via CSS
@@ -85,7 +134,7 @@ const geoJsonOptions = {
 };
 
 onMounted(() => {
-	startPolling();
+	startPolling(POLL_INTERVAL_MS);
 });
 
 onBeforeUnmount(() => {
@@ -100,7 +149,16 @@ function zoomIn() {
 function followVehicle(vehicle: Vehicle) {
 	followId.value = vehicle.id;
 	center.value = [vehicle.currentData.latitude, vehicle.currentData.longitude];
-	map.value?.leafletObject?.panTo(center.value);
+	// Ensure we are zoomed in sufficiently when starting follow, but don't override tighter zoom
+	const m = map.value?.leafletObject;
+	const FOLLOW_ZOOM = 18;
+	if (m) {
+		withNoMarkerTransitions(() => {
+			const targetZoom = Math.max(m.getZoom(), FOLLOW_ZOOM);
+			m.setView([center.value[0], center.value[1]], targetZoom, { animate: false });
+		});
+	}
+	nudgeIntoSafeBox();
 	userPanned.value = false;
 }
 
@@ -109,15 +167,20 @@ function onUserMoveStart() {
 	userPanned.value = true;
 }
 
+function onZoomStart() {
+	isZooming.value = true;
+}
+
+function onZoomEnd() {
+	isZooming.value = false;
+}
+
 watch(vehicles, (list) => {
-	if (!list || !followId.value || userPanned.value) return;
-	const vehicles = list.find((v) => v.id === followId.value);
-	if (!vehicles) return;
-	center.value = [
-		vehicles.currentData.latitude,
-		vehicles.currentData.longitude,
-	];
-	map.value?.leafletObject?.panTo(center.value);
+    if (!list || !followId.value || userPanned.value) return;
+    const vehicles = list.find((v) => v.id === followId.value);
+    if (!vehicles) return;
+    // Trigger a gentle nudge check (values above control smoothing & thresholds)
+    nudgeIntoSafeBox();
 });
 
 watch(
@@ -131,8 +194,16 @@ watch(
 			vehicle.currentData.latitude,
 			vehicle.currentData.longitude,
 		];
-		zoomIn();
-		map.value?.leafletObject?.panTo(center.value);
+
+		const m = map.value?.leafletObject;
+		const FOLLOW_ZOOM = 18;
+		if (m) {
+			withNoMarkerTransitions(() => {
+				const targetZoom = Math.max(m.getZoom(), FOLLOW_ZOOM);
+				m.setView([center.value[0], center.value[1]], targetZoom, { animate: false });
+			});
+		}
+		nudgeIntoSafeBox();
 		userPanned.value = false;
 	},
 	{ immediate: true }
@@ -186,7 +257,8 @@ watch(
 }
 
 @keyframes emergencyColorSwap {
-	0%, 100% {
+	0%,
+	100% {
 		stroke: #2563eb; /* blue-600 */
 		fill: rgba(37, 99, 235, 0.15);
 	}
@@ -198,8 +270,11 @@ watch(
 
 :deep(.emergency-route) {
 	animation: emergencyColorSwap 1s ease-in-out infinite;
-	transition: stroke 0.4s ease, fill 0.4s ease;
+	transition:
+		stroke 0.4s ease,
+		fill 0.4s ease;
 }
+
 :deep(.leaflet-bar a:hover) {
 	background: var(--ui-bg-hover, #1f2937);
 	color: var(--ui-text, #f3f4f6);
@@ -228,5 +303,31 @@ watch(
 	background: color-mix(in oklab, var(--ui-bg, #111827) 92%, transparent);
 	color: var(--ui-text, #e5e7eb);
 	border-color: var(--ui-border, #374151);
+}
+
+:deep(.icon-dark),
+:deep(.icon-light) {
+	transition: transform 2s linear;
+	will-change: transform;
+}
+
+:deep(.leaflet-zoom-anim .icon-dark),
+:deep(.leaflet-zoom-anim .icon-light) {
+	transition: none !important;
+}
+
+:deep(.leaflet-popup) {
+	transition: transform 2s linear;
+	will-change: transform;
+}
+
+:deep(.leaflet-zoom-anim .leaflet-popup) {
+	transition: none !important;
+}
+
+:deep(.no-marker-transition .icon-dark),
+:deep(.no-marker-transition .icon-light),
+:deep(.no-marker-transition .leaflet-popup) {
+	transition: none !important;
 }
 </style>
