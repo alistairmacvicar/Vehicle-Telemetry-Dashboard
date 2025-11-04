@@ -1,19 +1,13 @@
 import { z } from 'zod';
 import env from '~/lib/env';
-import type { Coordinates } from '~~/shared/types/geo.ts';
+import type { FeatureCollection, LineString } from 'geojson';
 
 const QuerySchema = z.object({
 	start: z.string(),
 	end: z.string(),
 });
 
-type ORSResponse = {
-	type: 'FeatureCollection';
-	features: Array<{
-		type: 'Feature';
-		geometry: { type: 'LineString'; coordinates: Coordinates[] };
-	}>;
-};
+type ORSResponse = FeatureCollection<LineString>;
 
 const URL = 'https://api.openrouteservice.org/v2/directions/driving-car';
 
@@ -29,10 +23,10 @@ export default defineEventHandler(async (event) => {
 
 	const { start, end } = query.data;
 
-	let result: ORSResponse;
+    let result: ORSResponse;
 
 	try {
-		result = await $fetch<ORSResponse>(URL, {
+        result = await $fetch<ORSResponse>(URL, {
 			method: 'GET',
 			query: {
 				api_key: env.ORS_API_KEY,
@@ -45,7 +39,7 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 502, statusMessage: 'Upstream error' });
 	}
 
-	const coordinates = result?.features?.[0]?.geometry?.coordinates?.length;
+    const coordinates = result?.features?.[0]?.geometry?.coordinates;
 
 	if (!Array.isArray(coordinates) || coordinates.length < 2) {
 		throw createError({
@@ -54,5 +48,5 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	return coordinates as Coordinates[];
+	return result;
 });

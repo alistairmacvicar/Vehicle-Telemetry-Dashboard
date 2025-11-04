@@ -1,4 +1,5 @@
-import type { Coordinates, Location } from './geo';
+import type { Location } from './geo';
+import type { FeatureCollection, LineString } from 'geojson';
 
 export interface TelemetryData {
 	timestamp: number;
@@ -20,7 +21,7 @@ export interface Vehicle {
 			speed: number;
 		};
 	route: {
-		directions: Coordinates[];
+		geoJSON: FeatureCollection<LineString>;
 		segIndex: number;
 		segOffset: number;
 		atEnd: boolean;
