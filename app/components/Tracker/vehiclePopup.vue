@@ -50,6 +50,7 @@ defineProps<{ vehicle: Vehicle }>();
 
 .license-plate {
 	font-family: 'Bebas Neue', Arial, sans-serif;
+	color: black;
 }
 
 .license-plate {
@@ -142,5 +143,6 @@ defineProps<{ vehicle: Vehicle }>();
 
 .details-button {
 	width: 100%;
+	color: #111827;
 }
 </style>
