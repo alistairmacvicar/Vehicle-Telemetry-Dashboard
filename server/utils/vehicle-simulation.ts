@@ -8,7 +8,7 @@ const TICK_RATE_MS = 1000;
 const TANK_CAPACITY_L = 93;
 const MAX_HISTORY = 3600; // 1 hour at 1s tick
 
-const vehicles: Vehicle[] = [];
+export const vehicles: Vehicle[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastTick = Date.now();
 
