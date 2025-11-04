@@ -9,6 +9,7 @@ export default defineNuxtConfig({
 		'@nuxt/ui',
 		'@nuxtjs/leaflet',
 		'@nuxtjs/color-mode',
+		'nuxt-echarts',
 	],
 	css: ['leaflet/dist/leaflet.css', '~/assets/css/main.css'],
 });

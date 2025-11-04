@@ -8,8 +8,8 @@ const NUM_VEHICLES = 2;
 const TICK_RATE_MS = 1000;
 const TANK_CAPACITY_L = 93;
 const MAX_HISTORY = 3600;
-const EMERGENCY_MIN_HOLD_MS = 20_000;
-const EMERGENCY_MAX_HOLD_MS = 60_000;
+const EMERGENCY_MIN_HOLD_MS = 300_000;
+const EMERGENCY_MAX_HOLD_MS = 900_000;
 const MIN_LOCAL_RANGE = 5;
 const MAX_LOCAL_RANGE = 50;
 export const vehicles: Vehicle[] = [];
@@ -192,9 +192,13 @@ async function generateRandomRoute({
 	longitude: startLongitude,
 	latitude: startLatitude,
 }: Location) {
-    // pick an end point near the start (keep routes short and local)
-    const { longitude: endLongitude, latitude: endLatitude } =
-        await generateNearbyCoordinates({ longitude: startLongitude, latitude: startLatitude }, MIN_LOCAL_RANGE, MAX_LOCAL_RANGE);
+	// pick an end point near the start (keep routes short and local)
+	const { longitude: endLongitude, latitude: endLatitude } =
+		await generateNearbyCoordinates(
+			{ longitude: startLongitude, latitude: startLatitude },
+			MIN_LOCAL_RANGE,
+			MAX_LOCAL_RANGE
+		);
 
 	let geoJSON: FeatureCollection<LineString> = {
 		type: 'FeatureCollection',
@@ -260,37 +264,43 @@ async function generateRandomCoordinates(): Promise<Location> {
 }
 
 async function generateNearbyCoordinates(
-    base: Location,
-    minKm = 3,
-    maxKm = 12
+	base: Location,
+	minKm = 3,
+	maxKm = 12
 ): Promise<Location> {
-    const deltaKm = rand(minKm, maxKm);
-    const bearing = rand(0, 2 * Math.PI);
-    // approximate: convert local km offset to degrees around the base latitude
-    const dLat = (deltaKm * Math.cos(bearing)) / 111;
-    const dLon = (deltaKm * Math.sin(bearing)) / (111 * Math.cos(toRad(base.latitude)));
-    const candidate: Location = {
-        longitude: base.longitude + dLon,
-        latitude: base.latitude + dLat,
-    };
+	const deltaKm = rand(minKm, maxKm);
+	const bearing = rand(0, 2 * Math.PI);
+	// approximate: convert local km offset to degrees around the base latitude
+	const dLat = (deltaKm * Math.cos(bearing)) / 111;
+	const dLon =
+		(deltaKm * Math.sin(bearing)) / (111 * Math.cos(toRad(base.latitude)));
+	const candidate: Location = {
+		longitude: base.longitude + dLon,
+		latitude: base.latitude + dLat,
+	};
 
-    // try to snap; if snapping fails, use candidate
-    try {
-        const response = await $fetch<Coordinates>(`/api/route/snap-coordinates`, {
-            method: 'GET',
-            query: {
-                longitude: candidate.longitude,
-                latitude: candidate.latitude,
-            },
-        });
-        const snapped: Location = { longitude: response[0], latitude: response[1] };
-        // if snapping jumped too far from the base (> 1.8x target max radius), keep the candidate instead
-        const dist = haversineKm(base.latitude, base.longitude, snapped.latitude, snapped.longitude);
-        if (dist <= maxKm * 1.8) return snapped;
-        return candidate;
-    } catch {
-        return candidate;
-    }
+	// try to snap; if snapping fails, use candidate
+	try {
+		const response = await $fetch<Coordinates>(`/api/route/snap-coordinates`, {
+			method: 'GET',
+			query: {
+				longitude: candidate.longitude,
+				latitude: candidate.latitude,
+			},
+		});
+		const snapped: Location = { longitude: response[0], latitude: response[1] };
+		// if snapping jumped too far from the base (> 1.8x target max radius), keep the candidate instead
+		const dist = haversineKm(
+			base.latitude,
+			base.longitude,
+			snapped.latitude,
+			snapped.longitude
+		);
+		if (dist <= maxKm * 1.8) return snapped;
+		return candidate;
+	} catch {
+		return candidate;
+	}
 }
 
 async function seed(count: number) {
@@ -340,7 +350,8 @@ async function seed(count: number) {
 		// initialize emergency lights state
 		emergencyStates.set(vehicle.id, {
 			isOn: false,
-			nextChangeAt: now + Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
+			nextChangeAt:
+				now + Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
 		});
 	}
 }
@@ -361,7 +372,9 @@ async function tick(dtSec: number) {
 			if (!state) {
 				state = {
 					isOn: false,
-					nextChangeAt: now + Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
+					nextChangeAt:
+						now +
+						Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
 				};
 				emergencyStates.set(vehicle.id, state);
 			}
@@ -369,9 +382,9 @@ async function tick(dtSec: number) {
 				// 20% chance to toggle when window elapses; otherwise retry soon
 				if (Math.random() < 0.2) {
 					state.isOn = !state.isOn;
-					state.nextChangeAt = now + Math.floor(
-						rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)
-					);
+					state.nextChangeAt =
+						now +
+						Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS));
 				} else {
 					state.nextChangeAt = now + 5_000;
 				}
