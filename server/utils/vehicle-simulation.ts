@@ -1,16 +1,23 @@
 import type { Coordinates, Location } from '~~/shared/types/geo.ts';
 import type { Vehicle, TelemetryData } from '~~/shared/types/vehicle.ts';
+import type { FeatureCollection, LineString } from 'geojson';
 
 const CENTER = { latitude: -34.92855422964225, longitude: 138.59985851659752 };
-const RADIUS_KM = 100;
+const RADIUS_KM = 90;
 const NUM_VEHICLES = 2;
 const TICK_RATE_MS = 1000;
 const TANK_CAPACITY_L = 93;
-const MAX_HISTORY = 3600; // 1 hour at 1s tick
-
+const MAX_HISTORY = 3600;
+const EMERGENCY_MIN_HOLD_MS = 20_000;
+const EMERGENCY_MAX_HOLD_MS = 60_000;
+const MIN_LOCAL_RANGE = 5;
+const MAX_LOCAL_RANGE = 50;
 export const vehicles: Vehicle[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastTick = Date.now();
+
+type EmergencyState = { isOn: boolean; nextChangeAt: number };
+const emergencyStates = new Map<string, EmergencyState>();
 
 function rand(min: number, max: number) {
 	return Math.random() * (max - min) + min;
@@ -114,16 +121,28 @@ function pushTelemetry(
 		vehicle.historicalData.shift();
 }
 
+function getRouteCoordinates(
+	geoJSON: FeatureCollection<LineString>
+): Coordinates[] {
+	const coords = geoJSON?.features?.[0]?.geometry?.coordinates as
+		| Coordinates[]
+		| undefined;
+	return Array.isArray(coords) ? coords : [];
+}
+
+//
+
 function moveAlongRoute(vehicle: Vehicle, distance: number) {
-	const routeLength = vehicle.route.directions.length;
+	const coords = getRouteCoordinates(vehicle.route.geoJSON);
+	const routeLength = coords.length;
 	if (vehicle.route.atEnd || routeLength < 2 || distance <= 0) return;
 
 	let i = vehicle.route.segIndex;
 	let offset = vehicle.route.segOffset;
 
 	while (distance > 0 && i < routeLength - 1) {
-		const [lng0, lat0] = vehicle.route.directions[i];
-		const [lng1, lat1] = vehicle.route.directions[i + 1];
+		const [lng0, lat0] = coords[i];
+		const [lng1, lat1] = coords[i + 1];
 		const segKm = haversineKm(lat0, lng0, lat1, lng1);
 		const remaining = segKm - offset;
 
@@ -140,30 +159,31 @@ function moveAlongRoute(vehicle: Vehicle, distance: number) {
 
 	if (i >= routeLength - 1) {
 		// reached end
-		const [endLongitude, endLatitude] =
-			vehicle.route.directions[routeLength - 1];
+		const [endLongitude, endLatitude] = coords[routeLength - 1];
 		vehicle.currentData.latitude = endLatitude;
 		vehicle.currentData.longitude = endLongitude;
-		vehicle.route.segIndex = routeLength - 2;
+		// preserve route; mark indices at end of final segment
+		vehicle.route.segIndex = Math.max(0, routeLength - 2);
 		vehicle.route.segOffset = haversineKm(
-			vehicle.route.directions[vehicle.route.segIndex][1],
-			vehicle.route.directions[vehicle.route.segIndex][0],
-			vehicle.route.directions[vehicle.route.segIndex + 1][1],
-			vehicle.route.directions[vehicle.route.segIndex + 1][0]
+			coords[vehicle.route.segIndex][1],
+			coords[vehicle.route.segIndex][0],
+			coords[vehicle.route.segIndex + 1][1],
+			coords[vehicle.route.segIndex + 1][0]
 		);
 		vehicle.route.atEnd = true;
 		return;
 	}
 
 	// interpolate position on current segment
-	const [lng0, lat0] = vehicle.route.directions[i];
-	const [lng1, lat1] = vehicle.route.directions[i + 1];
+	const [lng0, lat0] = coords[i];
+	const [lng1, lat1] = coords[i + 1];
 	const segKm = Math.max(1e-6, haversineKm(lat0, lng0, lat1, lng1));
 	const t = offset / segKm;
 
 	vehicle.currentData.latitude = lat0 + (lat1 - lat0) * t;
 	vehicle.currentData.longitude = lng0 + (lng1 - lng0) * t;
 	vehicle.currentData.heading = bearingDeg(lat0, lng0, lat1, lng1);
+	// Persist segment tracking relative to full route
 	vehicle.route.segIndex = i;
 	vehicle.route.segOffset = offset;
 }
@@ -171,14 +191,27 @@ function moveAlongRoute(vehicle: Vehicle, distance: number) {
 async function generateRandomRoute({
 	longitude: startLongitude,
 	latitude: startLatitude,
-}: Location): Promise<Coordinates[]> {
-	const { longitude: endLongitude, latitude: endLatitude } =
-		await generateRandomCoordinates();
+}: Location) {
+    // pick an end point near the start (keep routes short and local)
+    const { longitude: endLongitude, latitude: endLatitude } =
+        await generateNearbyCoordinates({ longitude: startLongitude, latitude: startLatitude }, MIN_LOCAL_RANGE, MAX_LOCAL_RANGE);
 
-	let directions: Coordinates[] = [[startLongitude, startLatitude]];
+	let geoJSON: FeatureCollection<LineString> = {
+		type: 'FeatureCollection',
+		features: [
+			{
+				type: 'Feature',
+				geometry: {
+					type: 'LineString',
+					coordinates: [[startLongitude, startLatitude]],
+				},
+				properties: {},
+			},
+		],
+	};
 
 	try {
-		const response = await $fetch<Coordinates[]>(`/api/route/directions`, {
+		const result = await $fetch(`/api/route/directions`, {
 			method: 'GET',
 			query: {
 				start: `${startLongitude},${startLatitude}`,
@@ -186,12 +219,16 @@ async function generateRandomRoute({
 			},
 		});
 
-		directions = response;
+		geoJSON = result as FeatureCollection<LineString>;
+
+		console.log(
+			`Generated route from (${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}) to (${endLatitude.toFixed(5)}, ${endLongitude.toFixed(5)}) with ${getRouteCoordinates(geoJSON).length} points.`
+		);
 	} catch {
-		return directions;
+		return { geoJSON };
 	}
 
-	return directions;
+	return { geoJSON };
 }
 
 async function generateRandomCoordinates(): Promise<Location> {
@@ -219,7 +256,41 @@ async function generateRandomCoordinates(): Promise<Location> {
 		return coordinates;
 	}
 
-	return { longitude, latitude };
+	return coordinates;
+}
+
+async function generateNearbyCoordinates(
+    base: Location,
+    minKm = 3,
+    maxKm = 12
+): Promise<Location> {
+    const deltaKm = rand(minKm, maxKm);
+    const bearing = rand(0, 2 * Math.PI);
+    // approximate: convert local km offset to degrees around the base latitude
+    const dLat = (deltaKm * Math.cos(bearing)) / 111;
+    const dLon = (deltaKm * Math.sin(bearing)) / (111 * Math.cos(toRad(base.latitude)));
+    const candidate: Location = {
+        longitude: base.longitude + dLon,
+        latitude: base.latitude + dLat,
+    };
+
+    // try to snap; if snapping fails, use candidate
+    try {
+        const response = await $fetch<Coordinates>(`/api/route/snap-coordinates`, {
+            method: 'GET',
+            query: {
+                longitude: candidate.longitude,
+                latitude: candidate.latitude,
+            },
+        });
+        const snapped: Location = { longitude: response[0], latitude: response[1] };
+        // if snapping jumped too far from the base (> 1.8x target max radius), keep the candidate instead
+        const dist = haversineKm(base.latitude, base.longitude, snapped.latitude, snapped.longitude);
+        if (dist <= maxKm * 1.8) return snapped;
+        return candidate;
+    } catch {
+        return candidate;
+    }
 }
 
 async function seed(count: number) {
@@ -227,7 +298,7 @@ async function seed(count: number) {
 		const now = Date.now();
 
 		const vehicle: Vehicle = {
-			id: `veh-${String(i + 1).padStart(3, '0')}`,
+			id: `amb-${String(i + 1).padStart(3, '0')}`,
 			name: `Vehicle ${i + 1}`,
 			historicalData: [],
 			currentData: {
@@ -241,10 +312,13 @@ async function seed(count: number) {
 				latitude: 0,
 				longitude: 0,
 				heading: 0,
-				speed: rand(20, 90),
+				speed: rand(10, 60),
 			},
 			route: {
-				directions: [],
+				geoJSON: {
+					type: 'FeatureCollection',
+					features: [],
+				} as FeatureCollection<LineString>,
 				segIndex: 0,
 				segOffset: 0,
 				atEnd: false,
@@ -253,13 +327,21 @@ async function seed(count: number) {
 		const { longitude, latitude } = await generateRandomCoordinates();
 		vehicle.currentData.longitude = longitude;
 		vehicle.currentData.latitude = latitude;
-
-		vehicle.route.directions = await generateRandomRoute({
+		console.log(`vehicle: ${vehicle.id} route generation started`);
+		const { geoJSON } = await generateRandomRoute({
 			longitude: vehicle.currentData.longitude,
 			latitude: vehicle.currentData.latitude,
 		});
+
+		setVehicleRoute(vehicle.id, geoJSON);
 		pushTelemetry(vehicle, now, 0, 0);
 		vehicles.push(vehicle);
+
+		// initialize emergency lights state
+		emergencyStates.set(vehicle.id, {
+			isOn: false,
+			nextChangeAt: now + Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
+		});
 	}
 }
 
@@ -269,19 +351,52 @@ async function tick(dtSec: number) {
 		vehicle.currentData.speed = clamp(
 			vehicle.currentData.speed + rand(-2, 2),
 			0,
-			110
+			60
 		);
+
+		// emergency lights state machine with hold times to avoid flicker
+		{
+			const now = Date.now();
+			let state = emergencyStates.get(vehicle.id);
+			if (!state) {
+				state = {
+					isOn: false,
+					nextChangeAt: now + Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
+				};
+				emergencyStates.set(vehicle.id, state);
+			}
+			if (now >= state.nextChangeAt) {
+				// 20% chance to toggle when window elapses; otherwise retry soon
+				if (Math.random() < 0.2) {
+					state.isOn = !state.isOn;
+					state.nextChangeAt = now + Math.floor(
+						rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)
+					);
+				} else {
+					state.nextChangeAt = now + 5_000;
+				}
+			}
+			vehicle.currentData.emergencyLights = state.isOn;
+		}
+
+		// If the route is invalid, trigger regeneration on this tick
+		{
+			const coords = getRouteCoordinates(vehicle.route.geoJSON);
+			if (coords.length < 2) {
+				vehicle.route.atEnd = true;
+			}
+		}
 
 		const distance = vehicle.currentData.speed * (dtSec / 3600);
 		moveAlongRoute(vehicle, distance);
 
 		if (vehicle.route.atEnd) {
-			const route = await generateRandomRoute({
+			const { geoJSON } = await generateRandomRoute({
 				longitude: vehicle.currentData.longitude,
 				latitude: vehicle.currentData.latitude,
 			});
 
-			setVehicleRoute(vehicle.id, route);
+			setVehicleRoute(vehicle.id, geoJSON);
 		}
 
 		let inst =
@@ -332,22 +447,27 @@ export function getVehicle(id: string): Vehicle | undefined {
 	return vehicles.find((v) => v.id === id);
 }
 
-export function setVehicleRoute(id: string, route: Coordinates[]) {
+export function setVehicleRoute(
+	id: string,
+	geoJSON: FeatureCollection<LineString>
+) {
 	const vehicle = getVehicle(id);
-	if (!vehicle || !Array.isArray(route) || route.length < 2) return false;
-	vehicle.route.directions = route.slice();
+	if (!vehicle) return false;
+	const coords = getRouteCoordinates(geoJSON);
+	if (!Array.isArray(coords) || coords.length < 2) return false;
+	vehicle.route.geoJSON = geoJSON;
 	vehicle.route.segIndex = 0;
 	vehicle.route.segOffset = 0;
 	vehicle.route.atEnd = false;
 	// start at route start
-	const [longitude, latitude] = vehicle.route.directions[0];
+	const [longitude, latitude] = coords[0];
 	vehicle.currentData.longitude = longitude;
 	vehicle.currentData.latitude = latitude;
 	vehicle.currentData.heading = bearingDeg(
 		latitude,
 		longitude,
-		vehicle.route.directions[1][1],
-		vehicle.route.directions[1][0]
+		coords[1][1],
+		coords[1][0]
 	);
 	return true;
 }
