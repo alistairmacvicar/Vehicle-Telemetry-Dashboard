@@ -43,6 +43,7 @@
 				<LGeoJson
 					v-if="vehicle.currentData.emergencyLights"
 					:geojson="vehicle.route.geoJSON"
+					:options="geoJsonOptions"
 				/>
 			</LMarker>
 		</LMap>
@@ -67,6 +68,21 @@ const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === 'dark');
 
 const { vehicles, startPolling, stopPolling, getVehicleById } = useVehicles();
+
+// Style options for GeoJSON emergency route with animated class applied on element
+const geoJsonOptions = {
+	style: () => ({
+		color: '#2563eb', // initial blue; animated via CSS
+		weight: 4,
+		opacity: 1,
+	}),
+	onEachFeature: (_feature: any, layer: any) => {
+		layer.on('add', () => {
+			const el = layer?.getElement?.();
+			if (el) el.classList.add('emergency-route');
+		});
+	},
+};
 
 onMounted(() => {
 	startPolling();
@@ -167,6 +183,22 @@ watch(
 	background: var(--ui-bg-elevated, var(--ui-bg, #111827));
 	color: var(--ui-text, #e5e7eb);
 	border-color: var(--ui-border, #374151);
+}
+
+@keyframes emergencyColorSwap {
+	0%, 100% {
+		stroke: #2563eb; /* blue-600 */
+		fill: rgba(37, 99, 235, 0.15);
+	}
+	50% {
+		stroke: #ef4444; /* red-500 */
+		fill: rgba(239, 68, 68, 0.15);
+	}
+}
+
+:deep(.emergency-route) {
+	animation: emergencyColorSwap 1s ease-in-out infinite;
+	transition: stroke 0.4s ease, fill 0.4s ease;
 }
 :deep(.leaflet-bar a:hover) {
 	background: var(--ui-bg-hover, #1f2937);
