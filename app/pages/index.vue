@@ -1,10 +1,14 @@
 <template>
-	<div>
+	<div class="page-fill">
 		<TrackerMap />
-		<TrackerVehicle />
 	</div>
 </template>
 
 <script lang="ts" setup></script>
 
-<style></style>
+<style>
+	.page-fill {
+		height: 100%;
+		min-height: 0;
+	}
+</style>
