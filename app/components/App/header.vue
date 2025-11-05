@@ -23,13 +23,14 @@ const saHealthLogo = computed(() =>
 				<NuxtLink
 					to="/"
 					aria-label="Go to home"
-					class="home-link"
+					class="home-link pl-1"
 				>
 					<UIcon
 						name="i-heroicons-home-20-solid"
 						class="home-icon text-black dark:text-white text-[3rem]"
 					/>
 				</NuxtLink>
+				<UColorModeButton class="text-[2rem] ml-8 color-mode-button" />
 			</div>
 		</template>
 
@@ -66,7 +67,6 @@ const saHealthLogo = computed(() =>
 		</div>
 		<template #right>
 			<div class="header-right">
-				<UColorModeButton />
 				<NuxtImg
 					class="main-logo"
 					:src="brandImage"
@@ -141,5 +141,9 @@ const saHealthLogo = computed(() =>
 .marquee-container {
 	width: 60vw;
 	max-width: 900px;
+}
+
+.color-mode-button {
+	transform: scale(1.5);
 }
 </style>
