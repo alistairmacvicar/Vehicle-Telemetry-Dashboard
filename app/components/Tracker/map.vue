@@ -9,6 +9,7 @@
 			:zoom="zoom"
 			:center="center"
 			:use-global-leaflet="false"
+			@ready="onMapReady"
 			@dragstart="onUserMoveStart"
 			@zoomstart="onZoomStart"
 			@zoomend="onZoomEnd"
@@ -149,20 +150,17 @@ onBeforeUnmount(() => {
 	stopPolling();
 });
 
-function zoomIn() {
-	zoom.value = 30;
-	map.value?.leafletObject?.setZoom(zoom.value);
-}
-
 function followVehicle(vehicle: Vehicle) {
 	followId.value = vehicle.id;
 	center.value = [vehicle.currentData.latitude, vehicle.currentData.longitude];
 
 	const m = map.value?.leafletObject;
 	const FOLLOW_ZOOM = 18;
+	// ensure the reactive zoom prop reflects the intended follow level
+	zoom.value = Math.max(zoom.value, FOLLOW_ZOOM);
 	if (m) {
 		withNoMarkerTransitions(() => {
-			const targetZoom = Math.max(m.getZoom(), FOLLOW_ZOOM);
+			const targetZoom = Math.max(m.getZoom?.() ?? 0, FOLLOW_ZOOM);
 			m.setView([center.value[0], center.value[1]], targetZoom, {
 				animate: false,
 			});
@@ -172,8 +170,13 @@ function followVehicle(vehicle: Vehicle) {
 	userPanned.value = false;
 }
 
+function onMapReady() {
+	if (!followId.value) return;
+	const vehicle = getVehicleById(followId.value);
+	if (vehicle) followVehicle(vehicle);
+}
+
 function onUserMoveStart() {
-	console.log('User panned the map, stopping follow.');
 	userPanned.value = true;
 }
 
@@ -198,24 +201,9 @@ watch(
 		if (!id) return;
 		followId.value = id;
 		const vehicle = getVehicleById(id);
-		if (!vehicle) return;
-		center.value = [
-			vehicle.currentData.latitude,
-			vehicle.currentData.longitude,
-		];
-
-		const m = map.value?.leafletObject;
-		const FOLLOW_ZOOM = 18;
-		if (m) {
-			withNoMarkerTransitions(() => {
-				const targetZoom = Math.max(m.getZoom(), FOLLOW_ZOOM);
-				m.setView([center.value[0], center.value[1]], targetZoom, {
-					animate: false,
-				});
-			});
+		if (vehicle) {
+			followVehicle(vehicle);
 		}
-		nudgeIntoSafeBox();
-		userPanned.value = false;
 	},
 	{ immediate: true }
 );
