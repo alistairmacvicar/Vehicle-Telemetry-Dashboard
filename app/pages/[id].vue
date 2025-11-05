@@ -89,7 +89,8 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	grid-template-rows: 1fr 1fr 1fr 1fr;
 	height: 100%;
 	min-height: 0;
-	gap: 0.5rem;
+	gap: 1rem;
+	padding: 1rem;
 }
 
 .card-title {
