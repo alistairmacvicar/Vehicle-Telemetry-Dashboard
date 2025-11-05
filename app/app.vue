@@ -10,14 +10,14 @@
 </template>
 
 <style>
-	.app-grid {
-		min-height: 100vh;
-		display: grid;
-		grid-template-rows: auto 1fr;
-	}
+.app-grid {
+	min-height: 100vh;
+	display: grid;
+	grid-template-rows: auto 1fr;
+}
 
-	.app-content {
-		min-height: 0;
-		height: 100%;
-	}
+.app-content {
+	min-height: 0;
+	height: 100%;
+}
 </style>
