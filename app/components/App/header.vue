@@ -1,23 +1,32 @@
 <script setup lang="ts">
+import brandMono from '~/assets/branding/ica_full_mono.png';
+import brandColour from '~/assets/branding/ica_full_colour.png';
+import flindersDark from '~/assets/branding/flinders_icon_dark.png';
+import flindersLight from '~/assets/branding/flinders_icon_light.png';
+import saHealthDark from '~/assets/branding/sa_health_dark.png';
+import saHealthLight from '~/assets/branding/sa_health_light.png';
+import icColour from '~/assets/branding/ic_colour.png';
+import niin from '~/assets/branding/niin.png';
+import saAmbulanceIcon from '~/assets/branding/sa_ambulance_icon.png';
+import ciscoColour from '~/assets/branding/cisco_colour.png';
+
 const colorMode = useColorMode();
 const brandImage = computed(() =>
-	colorMode.value === 'dark' ? 'ica_full_mono.png' : 'ica_full_colour.png'
+	colorMode.value === 'dark' ? brandMono : brandColour
 );
 const flindersLogo = computed(() =>
-	colorMode.value === 'dark'
-		? 'flinders_icon_dark.png'
-		: 'flinders_icon_light.png'
+	colorMode.value === 'dark' ? flindersDark : flindersLight
 );
 const saHealthLogo = computed(() =>
-	colorMode.value === 'dark' ? 'sa_health_dark.png' : 'sa_health_light.png'
+	colorMode.value === 'dark' ? saHealthDark : saHealthLight
 );
 </script>
 
 <template>
-    <UHeader
-        mode="slideover"
-        class="h-30 relative"
-    >
+	<UHeader
+		mode="slideover"
+		class="h-30 relative"
+	>
 		<template #left>
 			<div class="header-left">
 				<NuxtLink
@@ -32,33 +41,33 @@ const saHealthLogo = computed(() =>
 				</NuxtLink>
 				<UColorModeButton class="text-[2rem] ml-8 color-mode-button" />
 			</div>
-        </template>
+		</template>
 
 		<div class="header-center">
 			<div class="marquee-container">
 				<UMarquee>
-					<NuxtImg
-						src="ic_colour.png"
+					<img
+						:src="icColour"
 						class="marquee-image"
 					/>
-					<NuxtImg
-						src="niin.PNG"
+					<img
+						:src="niin"
 						class="marquee-image"
 					/>
-					<NuxtImg
-						src="sa_ambulance_icon.PNG"
+					<img
+						:src="saAmbulanceIcon"
 						class="marquee-image"
 					/>
-					<NuxtImg
-						src="cisco_colour.png"
+					<img
+						:src="ciscoColour"
 						class="marquee-image"
 					/>
-					<NuxtImg
+					<img
 						id="flinders-logo"
 						:src="flindersLogo"
 						style="height: 10rem"
 					/>
-					<NuxtImg
+					<img
 						:src="saHealthLogo"
 						class="marquee-image"
 					/>
@@ -67,16 +76,16 @@ const saHealthLogo = computed(() =>
 		</div>
 		<template #right>
 			<div class="header-right">
-				<NuxtImg
+				<img
 					class="main-logo"
 					:src="brandImage"
 				/>
 			</div>
-        </template>
-        <div
-            aria-hidden="true"
-            class="absolute left-0 right-0 bottom-0 h-[2px] bg-gray-200 dark:bg-gray-800 pointer-events-none z-50"
-        />
+		</template>
+		<div
+			aria-hidden="true"
+			class="absolute left-0 right-0 bottom-0 h-[2px] bg-gray-200 dark:bg-gray-800 pointer-events-none z-50"
+		/>
 	</UHeader>
 </template>
 
