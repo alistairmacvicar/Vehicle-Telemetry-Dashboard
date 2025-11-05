@@ -27,13 +27,13 @@
 				:lat-lng="[vehicle.currentData.latitude, vehicle.currentData.longitude]"
 				@click="followVehicle(vehicle)"
 			>
-			<LIcon
-				:icon-url="ambulanceSvg"
-				:icon-size="[50, 50]"
-				:icon-anchor="[25, 10]"
-				:popup-anchor="[0, -30]"
-				:class-name="getIconClass(vehicle)"
-			/>
+				<LIcon
+					:icon-url="ambulanceSvg"
+					:icon-size="[50, 50]"
+					:icon-anchor="[25, 10]"
+					:popup-anchor="[0, -30]"
+					:class-name="getIconClass(vehicle)"
+				/>
 				<LPopup
 					class="popup"
 					style="margin: 0"
@@ -77,7 +77,9 @@ function nudgeIntoSafeBox() {
 	if (!m || !followId.value || userPanned.value || isZooming.value) return;
 	const mapEl = m.getContainer();
 	const popupEl = mapEl.querySelector('.leaflet-popup') as HTMLElement | null;
-	const targetEl = (popupEl as HTMLElement | null) || (mapEl.querySelector('.is-followed') as HTMLElement | null);
+	const targetEl =
+		(popupEl as HTMLElement | null) ||
+		(mapEl.querySelector('.is-followed') as HTMLElement | null);
 
 	if (!targetEl) return;
 
@@ -95,7 +97,11 @@ function nudgeIntoSafeBox() {
 	if (Math.abs(dx) > threshX || Math.abs(dy) > threshY) {
 		const fx = 1; // move ~20% of the offset
 		const fy = 1;
-		m.panBy([dx * fx, dy * fy], { animate: true, duration: 1, easeLinearity: 0.3 });
+		m.panBy([dx * fx, dy * fy], {
+			animate: true,
+			duration: 1,
+			easeLinearity: 0.3,
+		});
 	}
 }
 
@@ -110,7 +116,9 @@ function withNoMarkerTransitions(run: () => void) {
 	try {
 		run();
 	} finally {
-		requestAnimationFrame(() => container.classList.remove('no-marker-transition'));
+		requestAnimationFrame(() =>
+			container.classList.remove('no-marker-transition')
+		);
 	}
 }
 
@@ -121,7 +129,7 @@ function getIconClass(vehicle: Vehicle) {
 
 const geoJsonOptions = {
 	style: () => ({
-		color: '#2563eb', // initial blue; animated via CSS
+		color: '#2563eb',
 		weight: 4,
 		opacity: 1,
 	}),
@@ -149,13 +157,15 @@ function zoomIn() {
 function followVehicle(vehicle: Vehicle) {
 	followId.value = vehicle.id;
 	center.value = [vehicle.currentData.latitude, vehicle.currentData.longitude];
-	// Ensure we are zoomed in sufficiently when starting follow, but don't override tighter zoom
+
 	const m = map.value?.leafletObject;
 	const FOLLOW_ZOOM = 18;
 	if (m) {
 		withNoMarkerTransitions(() => {
 			const targetZoom = Math.max(m.getZoom(), FOLLOW_ZOOM);
-			m.setView([center.value[0], center.value[1]], targetZoom, { animate: false });
+			m.setView([center.value[0], center.value[1]], targetZoom, {
+				animate: false,
+			});
 		});
 	}
 	nudgeIntoSafeBox();
@@ -176,11 +186,10 @@ function onZoomEnd() {
 }
 
 watch(vehicles, (list) => {
-    if (!list || !followId.value || userPanned.value) return;
-    const vehicles = list.find((v) => v.id === followId.value);
-    if (!vehicles) return;
-    // Trigger a gentle nudge check (values above control smoothing & thresholds)
-    nudgeIntoSafeBox();
+	if (!list || !followId.value || userPanned.value) return;
+	const vehicles = list.find((v) => v.id === followId.value);
+	if (!vehicles) return;
+	nudgeIntoSafeBox();
 });
 
 watch(
@@ -200,7 +209,9 @@ watch(
 		if (m) {
 			withNoMarkerTransitions(() => {
 				const targetZoom = Math.max(m.getZoom(), FOLLOW_ZOOM);
-				m.setView([center.value[0], center.value[1]], targetZoom, { animate: false });
+				m.setView([center.value[0], center.value[1]], targetZoom, {
+					animate: false,
+				});
 			});
 		}
 		nudgeIntoSafeBox();
@@ -259,20 +270,16 @@ watch(
 @keyframes emergencyColorSwap {
 	0%,
 	100% {
-		stroke: #2563eb; /* blue-600 */
-		fill: rgba(37, 99, 235, 0.15);
+		stroke: #2563eb;
 	}
 	50% {
-		stroke: #ef4444; /* red-500 */
-		fill: rgba(239, 68, 68, 0.15);
+		stroke: #ef4444;
 	}
 }
 
 :deep(.emergency-route) {
 	animation: emergencyColorSwap 1s ease-in-out infinite;
-	transition:
-		stroke 0.4s ease,
-		fill 0.4s ease;
+	transition: stroke 0.4s ease;
 }
 
 :deep(.leaflet-bar a:hover) {
