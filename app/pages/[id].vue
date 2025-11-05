@@ -1,34 +1,64 @@
 <template>
 	<div class="layout-grid">
 		<div class="map-component">
-			<UCard class="map-card">
+			<UCard class="map-card vd-surface-card">
 				<TrackerMap :follow-vehicle-id="vehicleId" />
 			</UCard>
 		</div>
-		<UCard class="data-container">
+		<UCard class="data-container vd-surface-card">
 			<template v-if="selectedVehicle">
-				<div class="card-title">Speed</div>
+				<div class="card-title">
+					<UIcon
+						name="i-heroicons-bolt-20-solid"
+						class="title-icon"
+					/>
+					Speed
+				</div>
 				<ChartsSpeedGauge :current-speed="selectedVehicle.currentData.speed" />
 			</template>
 		</UCard>
-		<UCard class="data-container">
-			<div class="card-title">Odometer Reading</div>
+		<UCard class="data-container vd-surface-card">
+			<div class="card-title">
+				<UIcon
+					name="i-heroicons-map-20-solid"
+					class="title-icon"
+				/>
+				Odometer Reading
+			</div>
 			<ChartsOdometerLine :odometer-series="odometerSeries" />
 		</UCard>
-		<UCard class="data-container">
-			<div class="card-title">Engine Temperatures</div>
+		<UCard class="data-container vd-surface-card">
+			<div class="card-title">
+				<UIcon
+					name="i-heroicons-fire-20-solid"
+					class="title-icon"
+				/>
+				Engine Temperatures
+			</div>
 			<ChartsEngineTempsLine
 				:oil-series="oilSeries"
 				:coolant-series="coolantSeries"
 			/>
 		</UCard>
-		<UCard class="data-container">
-			<div class="card-title">Emergency Light Status</div>
+		<UCard class="data-container vd-surface-card">
+			<div class="card-title">
+				<UIcon
+					name="i-heroicons-bell-alert-20-solid"
+					class="title-icon"
+				/>
+				Emergency Light Status
+			</div>
 			<ChartsEmergencyTimeline :lights-series="lightsSeries" />
 		</UCard>
 
-		<UCard class="temp-data-container">
-			<div class="card-title">Fuel Level & Consumption</div>
+		<UCard class="temp-data-container vd-surface-card">
+			<div class="card-title">
+				<UIcon
+					name="i-heroicons-chart-bar-20-solid"
+					class="title-icon"
+				/>
+				Fuel Level & Consumption
+			</div>
 			<ChartsSpeedConsumptionLine
 				:fuel-series="fuelSeries"
 				:consumption-series="consumptionSeries"
@@ -96,6 +126,14 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 .card-title {
 	font-weight: 600;
 	padding: 0.5rem 0.75rem;
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.title-icon {
+	color: #9db6ff;
+	filter: drop-shadow(0 0 6px rgba(150, 200, 255, 0.35));
 }
 
 .data-container {

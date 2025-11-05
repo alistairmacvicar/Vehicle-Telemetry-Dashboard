@@ -4,3 +4,131 @@
 @theme static {
 	--font-sans: 'Public Sans', sans-serif;
 }
+
+/* Global theme tokens for light/dark (used across sidebar and pages) */
+:root {
+	--panel-bg: rgba(255, 255, 255, 0.6);
+	--surface-start: rgba(235, 240, 255, 0.85);
+	--surface-end: rgba(248, 250, 255, 0.9);
+	--muted-start: rgba(230, 238, 255, 0.6);
+	--muted-end: rgba(245, 248, 255, 0.6);
+	--border-color: rgba(120, 140, 220, 0.35);
+	--inset-outline: rgba(130, 160, 255, 0.15);
+	--bar-bg-a: rgba(215, 222, 245, 0.9);
+	--bar-bg-b: rgba(230, 235, 248, 0.9);
+	--outer-shadow-1: 0 8px 18px rgba(15, 23, 42, 0.06);
+	--outer-shadow-2: 0 1px 2px rgba(15, 23, 42, 0.04);
+	--card-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+	--donut-track: rgba(210, 220, 245, 0.8);
+	--donut-inner: #ffffff;
+}
+
+.dark {
+	--panel-bg: rgba(12, 14, 22, 0.55);
+	--surface-start: rgba(20, 24, 50, 0.8);
+	--surface-end: rgba(10, 12, 24, 0.8);
+	--muted-start: rgba(40, 50, 90, 0.5);
+	--muted-end: rgba(20, 24, 50, 0.35);
+	--border-color: rgba(100, 140, 220, 0.25);
+	--inset-outline: rgba(130, 160, 255, 0.22);
+	--bar-bg-a: rgba(30, 36, 60, 0.9);
+	--bar-bg-b: rgba(20, 24, 50, 0.9);
+	--outer-shadow-1: 0 10px 30px rgba(20, 24, 50, 0.35);
+	--outer-shadow-2: 0 0 30px rgba(80, 170, 255, 0.25);
+	--card-shadow: 0 12px 26px rgba(10, 14, 30, 0.55);
+	--donut-track: rgba(25, 30, 60, 0.5);
+	--donut-inner: rgba(15, 18, 36, 0.95);
+}
+
+.vd-surface-card {
+	background: linear-gradient(180deg, var(--surface-start), var(--surface-end));
+	border: 1px solid var(--border-color);
+	box-shadow:
+		0 0 0 1px var(--inset-outline) inset,
+		var(--card-shadow);
+	border-radius: 0.75rem;
+}
+
+.vd-muted-surface {
+	background: linear-gradient(180deg, var(--muted-start), var(--muted-end));
+	border: 1px solid var(--border-color);
+}
+
+.vd-status-pill {
+	background: linear-gradient(180deg, var(--muted-start), var(--muted-end));
+	border: 1px solid var(--border-color);
+	border-radius: 999px;
+}
+
+.vd-glow-ambient {
+	box-shadow:
+		var(--card-shadow),
+		0 0 18px rgba(80, 170, 255, 0.08),
+		0 12px 28px rgba(15, 23, 42, 0.06);
+}
+.dark .vd-glow-ambient {
+	box-shadow:
+		var(--card-shadow),
+		0 0 24px rgba(0, 224, 255, 0.18),
+		0 16px 36px rgba(10, 14, 30, 0.55);
+}
+
+.vd-inner-glow {
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+	min-height: 0;
+}
+.vd-inner-glow::before {
+	content: '';
+	position: absolute;
+	inset: -2rem -2rem -1rem -2rem;
+	background:
+		radial-gradient(
+			120% 60% at 50% 0%,
+			rgba(0, 224, 255, 0.12),
+			transparent 60%
+		),
+		radial-gradient(
+			100% 50% at 100% 100%,
+			rgba(155, 107, 255, 0.08),
+			transparent 60%
+		);
+	filter: blur(14px);
+	z-index: 0;
+	pointer-events: none;
+}
+.vd-inner-glow > * {
+	position: relative;
+	z-index: 1;
+}
+.dark .vd-inner-glow::before {
+	background:
+		radial-gradient(
+			120% 60% at 50% 0%,
+			rgba(0, 224, 255, 0.18),
+			transparent 60%
+		),
+		radial-gradient(
+			100% 50% at 100% 100%,
+			rgba(155, 107, 255, 0.12),
+			transparent 60%
+		);
+	filter: blur(18px);
+}
+
+/* Map popup styling for Mapbox/Leaflet */
+.mapboxgl-popup-content,
+.leaflet-popup-content-wrapper {
+	background: linear-gradient(180deg, var(--surface-start), var(--surface-end));
+	border: 1px solid var(--border-color);
+	box-shadow:
+		0 0 0 1px var(--inset-outline) inset,
+		var(--card-shadow);
+	border-radius: 0.75rem;
+}
+.mapboxgl-popup-tip,
+.leaflet-popup-tip {
+	background: var(--surface-end);
+	border: 1px solid var(--border-color);
+}

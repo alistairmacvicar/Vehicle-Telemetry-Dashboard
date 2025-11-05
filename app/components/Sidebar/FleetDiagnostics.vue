@@ -1,0 +1,596 @@
+<template>
+	<div class="sidebar-root">
+		<div class="sidebar-title">
+			<span class="title-glow">Fleet Diagnostics</span>
+			<UIcon
+				name="i-heroicons-cpu-chip-20-solid"
+				class="title-icon"
+			/>
+		</div>
+
+		<div class="sidebar-summary">
+			<div class="summary-card">
+				<div class="summary-label">Vehicles</div>
+				<div class="summary-value">{{ (vehicles || []).length }}</div>
+			</div>
+			<div class="summary-card">
+				<div class="summary-label">Active Lights</div>
+				<div class="summary-value">{{ activeLightsCount }}</div>
+			</div>
+			<div class="summary-card">
+				<div class="summary-label">Avg Speed</div>
+				<div class="summary-value">{{ averageSpeed.toFixed(0) }} km/h</div>
+			</div>
+		</div>
+
+		<div
+			v-if="vehicles && vehicles.length"
+			class="sidebar-list"
+		>
+			<div
+				v-for="v in vehicles"
+				:key="v.id"
+				class="vehicle-card"
+				:class="statusClass(v)"
+			>
+				<div class="vehicle-header">
+					<div class="vehicle-name">
+						<UIcon
+							name="i-heroicons-truck-20-solid"
+							class="vehicle-icon"
+						/>
+						<span>{{ v.name }}</span>
+					</div>
+					<div class="status-pill">
+						<span>{{ statusLabel(v) }}</span>
+						<span
+							class="pulse-dot"
+							:class="{ 'is-alert': v.currentData.emergencyLights }"
+						></span>
+					</div>
+				</div>
+
+				<div class="metrics-row">
+					<div class="metric speed">
+						<div class="metric-label">Speed</div>
+						<div class="neon-bar">
+							<div
+								class="neon-fill"
+								:style="{ width: speedPct(v) + '%' }"
+							></div>
+						</div>
+						<div class="metric-value">
+							{{ v.currentData.speed.toFixed(0) }} km/h
+						</div>
+					</div>
+
+					<div class="metric fuel">
+						<div class="metric-label">Fuel</div>
+						<div
+							class="fuel-donut"
+							:style="{ '--p': fuelPct(v) }"
+						>
+							<div class="fuel-center">{{ fuelPct(v).toFixed(0) }}%</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="metrics-grid">
+					<div class="metric temp">
+						<UIcon
+							name="i-heroicons-fire-20-solid"
+							class="metric-icon"
+						/>
+						<div class="metric-label">Oil</div>
+						<div class="metric-value">
+							{{ v.currentData.engineOilTemp.toFixed(0) }} °C
+						</div>
+					</div>
+					<div class="metric temp">
+						<UIcon
+							name="i-heroicons-beaker-20-solid"
+							class="metric-icon"
+						/>
+						<div class="metric-label">Coolant</div>
+						<div class="metric-value">
+							{{ v.currentData.engineCoolantTemp.toFixed(0) }} °C
+						</div>
+					</div>
+				</div>
+
+				<div class="metrics-row bottom">
+					<div class="metric odo">
+						<UIcon
+							name="i-heroicons-map-20-solid"
+							class="metric-icon"
+						/>
+						<div class="metric-label">Odo</div>
+						<div class="metric-value">
+							{{ v.currentData.odometer.toFixed(0) }} km
+						</div>
+					</div>
+					<div class="heading-metric">
+						<div class="heading-label">
+							{{ v.currentData.heading.toFixed(0) }}°
+						</div>
+						<div
+							class="arrow"
+							:style="{ transform: 'rotate(' + v.currentData.heading + 'deg)' }"
+						></div>
+					</div>
+					<div class="bottom-button">
+						<UButton
+							class="details-link"
+							color="primary"
+							variant="soft"
+							size="xs"
+							trailing-icon="i-heroicons-arrow-right-20-solid"
+							aria-label="Follow on map"
+							@click="handleFollow(v)"
+						>
+							Find
+						</UButton>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div
+			v-else
+			class="sidebar-empty"
+		>
+			<div class="shimmer"></div>
+			<div class="empty-text">Loading live telemetry…</div>
+		</div>
+	</div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted } from 'vue';
+import type { Vehicle } from '~~/shared/types/vehicle';
+import { useVehicles } from '~/composables/useVehicles';
+
+const { vehicles, startPolling } = useVehicles();
+onMounted(() => {
+	startPolling();
+});
+
+const followVehicleId = useState<string | null>('followVehicleId', () => null);
+function handleFollow(v: Vehicle) {
+	followVehicleId.value = v.id;
+}
+
+const activeLightsCount = computed(
+	() =>
+		(vehicles.value || []).filter((v) => v.currentData.emergencyLights).length
+);
+
+const averageSpeed = computed(() => {
+	const list = vehicles.value || [];
+	if (!list.length) return 0;
+	return (
+		list.reduce((sum, v) => sum + (v.currentData.speed || 0), 0) / list.length
+	);
+});
+
+function fuelPct(v: Vehicle): number {
+	return Math.max(0, Math.min(100, v.currentData.fuelLevel));
+}
+
+function speedPct(v: Vehicle): number {
+	return Math.max(0, Math.min(100, Number(v.currentData.speed || 0)));
+}
+
+function statusLabel(v: Vehicle): string {
+	const oil = Number(v.currentData.engineOilTemp || 0);
+	const cool = Number(v.currentData.engineCoolantTemp || 0);
+	const fuel = Number(v.currentData.fuelLevel || 0);
+	if (v.currentData.emergencyLights) return 'ALERT';
+	if (oil > 120 || cool > 110 || fuel < 10) return 'CRITICAL';
+	if (oil > 105 || cool > 100 || fuel < 20) return 'WARN';
+	return 'OK';
+}
+
+function statusClass(v: Vehicle): string {
+	switch (statusLabel(v)) {
+		case 'CRITICAL':
+			return 'is-critical';
+		case 'WARN':
+			return 'is-warn';
+		case 'ALERT':
+			return 'is-alert';
+		default:
+			return 'is-ok';
+	}
+}
+</script>
+
+<style scoped>
+.sidebar-root {
+	height: 100%;
+	min-height: 0;
+	display: grid;
+	grid-template-rows: auto auto 1fr;
+	gap: 0.75rem;
+	background: var(--panel-bg);
+	backdrop-filter: blur(8px);
+	border-radius: 0.75rem;
+	border: 1px solid var(--border-color);
+	box-shadow:
+		0 0 0 1px var(--inset-outline) inset,
+		var(--outer-shadow-1),
+		var(--outer-shadow-2);
+	padding: 0.5rem;
+}
+
+.sidebar-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.25rem 0.5rem;
+}
+
+.title-glow {
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	background: linear-gradient(90deg, #7aa8ff, #9b6bff, #00e0ff);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+	text-shadow: 0 0 12px rgba(80, 170, 255, 0.35);
+}
+
+.title-icon {
+	font-size: 1.25rem;
+	color: #8fb0ff;
+	filter: drop-shadow(0 0 6px rgba(80, 170, 255, 0.4));
+}
+
+.sidebar-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-auto-rows: 1fr;
+	gap: 0.5rem;
+}
+
+.summary-card {
+	position: relative;
+	border-radius: 0.5rem;
+	padding: 0.5rem;
+	background:
+		radial-gradient(
+			120% 120% at 0% 0%,
+			rgba(0, 224, 255, 0.18),
+			rgba(0, 0, 0, 0) 60%
+		),
+		linear-gradient(180deg, var(--muted-start), var(--muted-end));
+	border: 1px solid var(--border-color);
+	box-shadow:
+		0 0 0 1px var(--inset-outline) inset,
+		0 6px 16px rgba(10, 14, 30, 0.4);
+	display: grid;
+	grid-template-rows: auto 1fr;
+	align-content: center;
+	height: 84px;
+}
+
+.summary-label {
+	font-size: 0.7rem;
+	opacity: 0.8;
+	margin-bottom: 0.25rem;
+}
+
+.summary-value {
+	font-size: 1.05rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: 'tnum' 1;
+	min-width: 4ch;
+	white-space: nowrap;
+}
+
+.sidebar-list {
+	height: 100%;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	display: grid;
+	grid-template-columns: 1fr;
+	justify-items: stretch;
+	gap: 0.5rem;
+	padding-right: 0;
+}
+
+.vehicle-card {
+	position: relative;
+	border-radius: 0.75rem;
+	padding: 0.75rem;
+	background: linear-gradient(180deg, var(--surface-start), var(--surface-end));
+	border: 1px solid var(--border-color);
+	box-shadow:
+		0 0 0 1px var(--inset-outline) inset,
+		var(--card-shadow);
+	transition:
+		transform 120ms ease,
+		box-shadow 200ms ease,
+		border-color 200ms ease;
+	width: 100%;
+	justify-self: stretch;
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+.vehicle-card:hover {
+	transform: translateY(-1px);
+	box-shadow:
+		0 0 0 1px rgba(130, 160, 255, 0.2) inset,
+		0 16px 36px rgba(10, 14, 30, 0.6),
+		0 0 24px rgba(0, 224, 255, 0.2);
+}
+
+.vehicle-card.is-ok {
+	border-color: rgba(50, 220, 140, 0.35);
+}
+.vehicle-card.is-warn {
+	border-color: rgba(255, 200, 60, 0.45);
+	box-shadow:
+		0 0 0 1px rgba(255, 200, 60, 0.15) inset,
+		0 12px 26px rgba(10, 14, 30, 0.55),
+		0 0 16px rgba(255, 200, 60, 0.18);
+}
+.vehicle-card.is-critical,
+.vehicle-card.is-alert {
+	border-color: rgba(255, 70, 70, 0.5);
+	box-shadow:
+		0 0 0 1px rgba(255, 70, 70, 0.18) inset,
+		0 12px 28px rgba(10, 14, 30, 0.6),
+		0 0 20px rgba(255, 70, 70, 0.22);
+}
+
+.vehicle-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 0.25rem;
+}
+
+.vehicle-name {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-weight: 600;
+}
+
+.vehicle-icon {
+	color: #9db6ff;
+	filter: drop-shadow(0 0 6px rgba(150, 200, 255, 0.35));
+}
+
+.status-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: 0.65rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	padding: 0.15rem 0.5rem;
+	border-radius: 999px;
+	border: 1px solid var(--border-color);
+	background: linear-gradient(180deg, var(--muted-start), var(--muted-end));
+}
+
+.pulse-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #32dc8c;
+	box-shadow: 0 0 10px rgba(50, 220, 140, 0.7);
+	animation: pulse 2s infinite;
+}
+.pulse-dot.is-alert {
+	background: #ff4a4a;
+	box-shadow: 0 0 12px rgba(255, 74, 74, 0.85);
+	animation-duration: 1s;
+}
+
+@keyframes pulse {
+	0% {
+		opacity: 0.6;
+		transform: scale(0.9);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	100% {
+		opacity: 0.6;
+		transform: scale(0.9);
+	}
+}
+
+.metrics-row {
+	display: grid;
+	grid-template-columns: 1fr 72px;
+	gap: 0.5rem;
+	align-items: center;
+	margin: 0.25rem 0;
+}
+.metrics-row.bottom {
+	grid-template-columns: 2fr 1fr 1fr;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+}
+
+.metric {
+	display: grid;
+	gap: 0.25rem;
+	align-items: center;
+}
+.metric-label {
+	font-size: 0.7rem;
+	opacity: 0.8;
+}
+.metric-value {
+	font-size: 0.85rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: 'tnum' 1;
+	min-width: 6ch;
+	white-space: nowrap;
+}
+
+.neon-bar {
+	position: relative;
+	height: 8px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, var(--bar-bg-a), var(--bar-bg-b));
+	box-shadow: inset 0 0 0 1px rgba(100, 140, 220, 0.25);
+}
+.neon-fill {
+	height: 100%;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #00e0ff, #9b6bff);
+	box-shadow: 0 0 12px rgba(0, 224, 255, 0.65);
+	transition: width 300ms ease;
+}
+
+.fuel-donut {
+	--size: 54px;
+	--thickness: 8px;
+	width: var(--size);
+	height: var(--size);
+	border-radius: 50%;
+	background:
+		conic-gradient(#00e0ff calc(var(--p) * 1%), var(--donut-track) 0),
+		radial-gradient(
+			circle at 50% 50%,
+			var(--donut-inner) calc(50% - var(--thickness)),
+			transparent calc(50% - var(--thickness) + 1px)
+		);
+	box-shadow: 0 0 16px rgba(0, 224, 255, 0.35);
+	position: relative;
+}
+.fuel-center {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.8rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: 'tnum' 1;
+}
+.metrics-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+}
+
+.metric.temp {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 0.35rem;
+}
+.metric.odo {
+	display: grid;
+	grid-template-columns: auto auto 1fr;
+	align-items: center;
+	gap: 0.35rem;
+}
+.metric.odo .metric-value {
+	justify-self: end;
+	text-align: right;
+}
+.heading-metric {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	justify-self: start;
+	padding-left: 0.4rem;
+	gap: 0.35rem;
+	flex-direction: row-reverse;
+}
+.bottom-button {
+	justify-self: end;
+}
+.metric-icon {
+	color: #9db6ff;
+	filter: drop-shadow(0 0 6px rgba(150, 200, 255, 0.35));
+}
+
+.footer-row {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	margin-top: 0.25rem;
+}
+.heading-indicator {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.arrow {
+	width: 0;
+	height: 0;
+	border-left: 0.5rem solid transparent;
+	border-right: 0.5rem solid transparent;
+	border-bottom: 0.875rem solid #8fb0ff;
+	filter: drop-shadow(0 0 6px rgba(150, 200, 255, 0.4));
+	transition: transform 200ms ease;
+}
+.heading-label {
+	font-size: 0.75rem;
+	opacity: 0.85;
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: 'tnum' 1;
+}
+.details-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	font-size: 0.8rem;
+	color: #8fb0ff;
+	text-decoration: none;
+	filter: drop-shadow(0 0 6px rgba(130, 160, 255, 0.25));
+}
+.details-link:hover {
+	text-decoration: underline;
+}
+
+.sidebar-empty {
+	height: 100%;
+	min-height: 0;
+	display: grid;
+	place-items: center;
+	gap: 0.5rem;
+}
+.shimmer {
+	width: 90%;
+	height: 120px;
+	border-radius: 0.75rem;
+	background: linear-gradient(
+		90deg,
+		rgba(40, 50, 90, 0.25) 0%,
+		rgba(100, 140, 220, 0.35) 50%,
+		rgba(40, 50, 90, 0.25) 100%
+	);
+	background-size: 200% 100%;
+	animation: shimmer-move 1.6s infinite linear;
+}
+@keyframes shimmer-move {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+.empty-text {
+	opacity: 0.8;
+	font-size: 0.9rem;
+}
+</style>
