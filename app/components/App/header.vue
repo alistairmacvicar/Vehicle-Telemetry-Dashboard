@@ -14,10 +14,10 @@ const saHealthLogo = computed(() =>
 </script>
 
 <template>
-	<UHeader
-		mode="slideover"
-		class="h-30"
-	>
+    <UHeader
+        mode="slideover"
+        class="h-30 relative"
+    >
 		<template #left>
 			<div class="header-left">
 				<NuxtLink
@@ -32,7 +32,7 @@ const saHealthLogo = computed(() =>
 				</NuxtLink>
 				<UColorModeButton class="text-[2rem] ml-8 color-mode-button" />
 			</div>
-		</template>
+        </template>
 
 		<div class="header-center">
 			<div class="marquee-container">
@@ -72,7 +72,11 @@ const saHealthLogo = computed(() =>
 					:src="brandImage"
 				/>
 			</div>
-		</template>
+        </template>
+        <div
+            aria-hidden="true"
+            class="absolute left-0 right-0 bottom-0 h-[2px] bg-gray-200 dark:bg-gray-800 pointer-events-none z-50"
+        />
 	</UHeader>
 </template>
 
