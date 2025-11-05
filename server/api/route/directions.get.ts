@@ -26,12 +26,13 @@ export default defineEventHandler(async (event) => {
     let result: ORSResponse;
 
 	try {
-        result = await $fetch<ORSResponse>(URL, {
+		result = await $fetch<ORSResponse>(URL, {
 			method: 'GET',
 			query: {
 				api_key: env.ORS_API_KEY,
 				start,
 				end,
+				attributes: 'avgspeed',
 			},
 		});
 	} catch (error) {

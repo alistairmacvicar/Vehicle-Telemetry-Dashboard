@@ -25,5 +25,10 @@ export interface Vehicle {
 		segIndex: number;
 		segOffset: number;
 		atEnd: boolean;
+			speedProfile?: Array<{
+				from: number;
+				to: number;
+				speedKmh: number;
+			}>;
 	};
 }

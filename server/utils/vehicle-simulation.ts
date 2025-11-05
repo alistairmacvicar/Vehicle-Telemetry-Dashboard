@@ -130,6 +130,59 @@ function getRouteCoordinates(
 	return Array.isArray(coords) ? coords : [];
 }
 
+function buildSpeedProfileFromRoute(
+    geoJSON: FeatureCollection<LineString>
+) {
+    const feature = geoJSON?.features?.[0] as any;
+    const properties = feature?.properties as any;
+    const segments = properties?.segments as any[] | undefined;
+    const profile: Array<{ from: number; to: number; speedKmh: number }> = [];
+
+    if (Array.isArray(segments)) {
+        for (const seg of segments) {
+            const steps = seg?.steps as any[] | undefined;
+            if (!Array.isArray(steps)) continue;
+            for (const step of steps) {
+                const wayPoints = step?.way_points as [number, number] | undefined;
+                const distanceM = Number(step?.distance) || 0;
+                const durationS = Number(step?.duration) || 0;
+                if (
+                    Array.isArray(wayPoints) &&
+                    wayPoints.length === 2 &&
+                    wayPoints[1] > wayPoints[0]
+                ) {
+                    const rawSpeed = durationS > 0 ? (3.6 * distanceM) / durationS : 0;
+                    const speedKmh = clamp(rawSpeed || 0, 5, 120);
+                    profile.push({ from: wayPoints[0], to: wayPoints[1], speedKmh });
+                }
+            }
+        }
+    }
+
+    if (profile.length === 0) {
+        const coords = getRouteCoordinates(geoJSON);
+        if (coords.length >= 2) {
+            profile.push({ from: 0, to: coords.length - 1, speedKmh: 50 });
+        }
+    }
+
+    return profile;
+}
+
+function classifyAdelaideSpeedLimit(rawKmh: number) {
+    if (rawKmh >= 90) return 100;
+    if (rawKmh >= 75) return 80;
+    if (rawKmh >= 58) return 60;
+    return 50;
+}
+
+function minMovingFloorFor(limitKmh: number) {
+    if (limitKmh >= 100) return 30;
+    if (limitKmh >= 80) return 30;
+    if (limitKmh >= 60) return 20;
+    return 10;
+}
+
 function moveAlongRoute(vehicle: Vehicle, distance: number) {
 	const coords = getRouteCoordinates(vehicle.route.geoJSON);
 	const routeLength = coords.length;
@@ -356,12 +409,25 @@ async function seed(count: number) {
 
 async function tick(dtSec: number) {
 	for (const vehicle of vehicles) {
-		// small speed wander
-		vehicle.currentData.speed = clamp(
-			vehicle.currentData.speed + rand(-2, 2),
-			0,
-			60
-		);
+        // determine target speed for current route segment if available
+        let targetSpeed = 50;
+        const profile = vehicle.route.speedProfile;
+        if (Array.isArray(profile) && profile.length > 0) {
+            const segIdx = vehicle.route.segIndex;
+            const match = profile.find((p) => segIdx >= p.from && segIdx < p.to);
+            if (match) targetSpeed = match.speedKmh;
+        }
+
+        // Quantize to Adelaide defaults and apply jitter/floors (avoid 0 on fast roads)
+        const limit = classifyAdelaideSpeedLimit(targetSpeed);
+        const jittered = clamp(limit + rand(-4, 4), 0, 110);
+        const floor = minMovingFloorFor(limit);
+        const current = vehicle.currentData.speed;
+        const desired = Math.max(jittered, floor);
+        // limit acceleration/deceleration per tick (approx 12 km/h per 2s)
+        const maxDelta = 12 * (dtSec / 2);
+        const delta = clamp(desired - current, -maxDelta, maxDelta);
+        vehicle.currentData.speed = clamp(current + delta, 0, 110);
 
 		// emergency lights state machine with hold times to avoid flicker
 		{
@@ -461,6 +527,7 @@ export function setVehicleRoute(
 	const coords = getRouteCoordinates(geoJSON);
 	if (!Array.isArray(coords) || coords.length < 2) return false;
 	vehicle.route.geoJSON = geoJSON;
+    vehicle.route.speedProfile = buildSpeedProfileFromRoute(geoJSON);
 	vehicle.route.segIndex = 0;
 	vehicle.route.segOffset = 0;
 	vehicle.route.atEnd = false;
