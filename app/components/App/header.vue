@@ -76,10 +76,12 @@ const saHealthLogo = computed(() =>
 		</div>
 		<template #right>
 			<div class="header-right">
-				<img
-					class="main-logo"
-					:src="brandImage"
-				/>
+				<NuxtLink to="about">
+					<img
+						class="main-logo"
+						:src="brandImage"
+					/>
+				</NuxtLink>
 			</div>
 		</template>
 		<div
