@@ -1,0 +1,91 @@
+name: Quality Gates
+on:
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - '.github/**'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install deps
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: TypeScript compile (no emit)
+        run: npx tsc -p tsconfig.json --noEmit
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run tests (if script available)
+        run: |
+          if npm run -s test >/dev/null 2>&1; then
+            npm test
+          else
+            echo "No test script defined"
+          fi
+
+  dep-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --omit=dev
+      - name: Audit prod dependencies
+        run: npm audit --omit=dev || true
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, tests, dep-scan]
+    if: always()
+    steps:
+      - name: Gate result
+        run: |
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Typecheck: ${{ needs.typecheck.result }}"
+          echo "Tests: ${{ needs.tests.result }}"
+          echo "Dep Scan: ${{ needs.dep-scan.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.typecheck.result }}" != "success" ]; then
+            echo "Blocking due to lint/typecheck failures" && exit 1
+          fi

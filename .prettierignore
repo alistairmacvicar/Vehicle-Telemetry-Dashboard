@@ -1,0 +1,17 @@
+# Dependency and build outputs
+node_modules
+.nuxt
+.output
+.dist
+.build
+dist
+coverage
+.temp
+
+# Logs
+*.log
+
+# Package manager locks (keep as-is)
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
