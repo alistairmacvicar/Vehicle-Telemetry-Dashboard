@@ -1,64 +1,118 @@
-# AI Coding Agent Instructions
+# Vehicle Telemetry Dashboard - Development Guide
 
-Concise guide for Nuxt 4 + Vue 3 telemetry dashboard. Favor existing patterns; reuse helpers; no redundant comments.
+## Project Overview
 
-## Architecture & Data Flow
+Real-time vehicle telemetry visualization dashboard built with Nuxt 3, TypeScript, Vue 3, and Apache ECharts. Features live vehicle tracking with OpenStreetMap integration and real-time chart updates.
 
-Frontend: `app/pages`, global shell `app/app.vue`, feature components in `app/components/**` (Charts, Sidebar, Tracker). Shared logic in `app/composables`, `app/lib`.
-Backend (Nitro): API in `server/api/**`; simulation loop `server/utils/vehicle-simulation.ts` launched by `server/plugins/vehicle-simulation.ts`.
-Shared types: `shared/types/*` (`Vehicle`, `TelemetryData`, `DataRecord`). Import instead of redefining.
-Lifecycle: `startSimulation()` seeds & ticks `vehicles[]`; client polls `/api/vehicles?id=all` (remaining route geoJSON only).
-Routing services: Only via internal endpoints (`/api/route/directions`, `/api/route/snap-coordinates`).
+## Technology Stack
 
-## Conventions & Patterns
+- **Framework**: Nuxt 3, Vue 3 Composition API
+- **Language**: TypeScript 5.x targeting ES2022
+- **Charts**: Apache ECharts, vue-echarts
+- **Mapping**: Leaflet
+- **Styling**: Nuxt UI
+- **Validation**: Zod
+- **Testing**: Playwright
 
-Aliases: `~/` (app), `~~/` (root). Use shared types from `~~/shared/*`.
-Env: early validation (`app/lib/env.ts`, `try-parse-env.ts`). Extend `EnvSchema` for new required keys.
-Polling: mirror `useVehicles()` (fetch key + `refreshNuxtData`). Store state with `useState`; avoid server timers.
-Charts: reuse `timeAxis`, `valueAxis`, `baseTooltip`, `dataZoom` from `app/lib/util/echarts.ts`.
-Series transforms: extend `data-to-series.ts` for new metrics.
-Movement & route mutation: server-only.
-Validation: Zod for all queries (`getValidatedQuery(event, Schema.safeParse)` then check `.success`).
-Vehicle payload: include truncated `route.geoJSON` plus tracking indexes.
+**IMPORTANT**: Check `package.json` for installed versions before suggesting library-specific code.
 
-## Styling & UI
+## Project Structure
 
-Scoped CSS + Nuxt UI utilities; keep gradients, compact grids, tabular numbers.
-Dark mode: derive `isDark` via `useColorMode()`; no hardcoded light colors.
+```
+app/
+  ├── components/     # Vue components (Charts, Tracker, Sidebar)
+  ├── composables/    # Shared composables (useVehicles)
+  ├── pages/          # Nuxt pages and routes
+  └── lib/            # Utilities and helpers
+server/
+  ├── api/            # API routes
+  ├── plugins/        # Server plugins (vehicle simulation)
+  └── utils/          # Server utilities
+shared/
+  └── types/          # Shared TypeScript types (vehicle, geo, data)
+```
 
-## Performance & Safety
+## Key Patterns & Conventions
 
-Tick loop logging minimal; guard with `NODE_ENV !== 'production'`.
-Clamp telemetry values (follow `pushTelemetry()` patterns).
-No per-request recomputation of history arrays.
+### State Management
 
-## Extending Functionality
+- Use **composables pattern** for shared state (see `composables/useVehicles.ts`)
+- Follow Vue 3 Composition API with `<script setup>` syntax
+- Keep reactive state minimal and focused
 
-Telemetry metric: extend `TelemetryData`, update `pushTelemetry()`, add transform in `data-to-series.ts`, chart consumes utilities.
-API route: add `server/api/<name>.get.ts`; define schema; validate; return minimal typed payload.
-Live resource: new composable mirroring `useVehicles()` with start/stop + ID lookup.
+### Type Definitions
 
-## Build & Tooling
+- All vehicle types: `shared/types/vehicle.ts`
+- Geographic types: `shared/types/geo.ts`
+- Data series types: `shared/types/data.ts`
+- **Shared types** are used by both client and server
 
-Scripts: `dev`, `build`, `generate`, `preview`, `lint`, `lint:fix`; postinstall `nuxt prepare`.
-Run `npm run lint:fix` before commits.
-Generated TS configs: don’t modify.
+### ECharts Integration
 
-## DO / DO NOT
+- Use utilities in `lib/util/echarts.ts` for consistent chart configuration
+- Import chart types from `echarts/charts` (not full bundle)
+- Use client-side plugin: `plugins/echarts.client.ts`
 
-DO: reuse helpers/types; validate queries; keep movement logic server-only.
-DO NOT: duplicate movement logic client-side; call external routing APIs directly; poll faster than 500ms.
+### Real-time Data
 
-## Secrets & Env
+- Vehicle simulation: `server/plugins/vehicle-simulation.ts`
+- Data transformation: `lib/util/data-to-series.ts`
+- All data updates flow through composables
 
-`ORS_API_KEY` required; add new secrets to `EnvSchema`; use only server-side.
+## Development Standards
 
-## Review Checklist
+Comprehensive guidelines are automatically applied based on file type:
 
-1. Types updated if new data appears.
-2. Input validated; payload trimmed.
-3. Components use transformed series.
-4. Dark mode preserved.
-5. Lint passes.
+- **[TypeScript Standards](./.github/instructions/typescript-5-es2022.instructions.md)** - Language conventions, type system, ES2022 features
+- **[Security Practices](./.github/instructions/security-and-owasp.instructions.md)** - OWASP Top 10, input validation, secure coding
+- **[Performance Optimization](./.github/instructions/performance-optimization.instructions.md)** - Frontend/backend performance, profiling
+- **[Testing with Playwright](./.github/instructions/playwright-typescript.instructions.md)** - E2E test generation and best practices
+- **[Code Commenting](./.github/instructions/self-explanatory-code-commenting.instructions.md)** - When and how to comment
+- **[Copilot Behavior](./.github/instructions/taming-copilot.instructions.md)** - Response style and interaction patterns
+- **[Task Implementation](./.github/instructions/task-implementation.instructions.md)** - Task planning and tracking workflow
 
-Feedback welcome for further compression or clarity.
+## Available Development Tools
+
+### Prompts (use `/command`)
+
+- `/playwright-generate-test` - Generate Playwright E2E tests
+- `/documentation-writer` - Generate or update documentation
+- `/github-copilot-starter` - Set up Copilot config for new projects
+
+### Chat Modes (use `#file:path`)
+
+- `#file:.github/chatmodes/debug.chatmode.md` - Systematic debugging workflow
+- `#file:.github/chatmodes/task-planner.chatmode.md` - Research-driven feature planning
+- `#file:.github/chatmodes/task-researcher.chatmode.md` - Comprehensive research collection
+
+## Critical Requirements
+
+### Version Consistency
+
+- **Always verify** library versions before suggesting code
+- **Use `#fetch` tool** to get current documentation for libraries
+- **Never assume** API syntax - check actual version being used
+- Current versions in this project: Check `package.json` first
+
+### Factual Verification Workflow
+
+**MANDATORY** when working with libraries or frameworks:
+
+1. **Identify the library** being used
+2. **Check `package.json`** for the installed version
+3. **Use `#fetch`** to retrieve current documentation for that version
+4. **Verify API syntax** matches the installed version
+5. **Only then** suggest code or solutions
+
+**Never rely on training data** for version-specific APIs. Always verify.
+
+### Code Generation Philosophy
+
+- **Minimal and surgical**: Make smallest necessary changes
+- **Preserve existing code**: Respect current architecture and patterns
+- **Explicit instructions only**: Don't refactor unsolicited code
+- **Direct implementation**: Edit files directly when asked, don't provide copy-paste snippets
+
+---
+
+**Note**: This file provides project context and navigation. Detailed coding standards are in specialized instruction files that apply automatically based on file type.
