@@ -27,6 +27,7 @@
 				:key="vehicle.id"
 				:lat-lng="[vehicle.currentData.latitude, vehicle.currentData.longitude]"
 				@click="followVehicle(vehicle)"
+				:ref="setMarkerRef(vehicle.id)"
 			>
 				<LIcon
 					:icon-url="ambulanceSvg"
@@ -38,6 +39,7 @@
 				<LPopup
 					class="popup"
 					style="margin: 0"
+					:options="{ autoPan: false }"
 				>
 					<TrackerVehiclePopup :vehicle="vehicle" />
 				</LPopup>
@@ -52,7 +54,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import {
+	ref,
+	computed,
+	watch,
+	onMounted,
+	onBeforeUnmount,
+	nextTick,
+} from 'vue';
 import type { Vehicle } from '../../../shared/types/vehicle';
 import ambulanceSvg from '~/assets/icons/MdiAmbulance.svg';
 import { useVehicles } from '~/composables/useVehicles';
@@ -65,22 +74,48 @@ const map = ref();
 const followId = ref<string | null>(null);
 const userPanned = ref(false);
 const isZooming = ref(false);
+const isCentering = ref(false);
 
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === 'dark');
 
 const { vehicles, startPolling, stopPolling, getVehicleById } = useVehicles();
-//TODO: MAKE THIS GLOBAL IN THE APPLICATION/SERVER
 const POLL_INTERVAL_MS = 2000;
+
+const markerRefs = new Map<string, any>();
+function setMarkerRef(id: string) {
+	return (el: any) => {
+		if (el) markerRefs.set(id, el);
+		else markerRefs.delete(id);
+	};
+}
+
+function openFollowPopup() {
+	if (!followId.value) return;
+	const markerComp = markerRefs.get(followId.value);
+	const leafletMarker = markerComp?.leafletObject;
+	const m = map.value?.leafletObject;
+	if (leafletMarker && m) {
+		nextTick(() => {
+			try {
+				leafletMarker.openPopup?.();
+			} catch {}
+		});
+	}
+}
 
 function nudgeIntoSafeBox() {
 	const m = map.value?.leafletObject;
-	if (!m || !followId.value || userPanned.value || isZooming.value) return;
+	if (
+		!m ||
+		!followId.value ||
+		userPanned.value ||
+		isZooming.value ||
+		isCentering.value
+	)
+		return;
 	const mapEl = m.getContainer();
-	const popupEl = mapEl.querySelector('.leaflet-popup') as HTMLElement | null;
-	const targetEl =
-		(popupEl as HTMLElement | null) ||
-		(mapEl.querySelector('.is-followed') as HTMLElement | null);
+	const targetEl = mapEl.querySelector('.is-followed') as HTMLElement | null;
 
 	if (!targetEl) return;
 
@@ -96,7 +131,7 @@ function nudgeIntoSafeBox() {
 	const threshY = mapRect.height * 0.2;
 
 	if (Math.abs(dx) > threshX || Math.abs(dy) > threshY) {
-		const fx = 1; // move ~20% of the offset
+		const fx = 1;
 		const fy = 1;
 		m.panBy([dx * fx, dy * fy], {
 			animate: true,
@@ -120,6 +155,25 @@ function withNoMarkerTransitions(run: () => void) {
 		requestAnimationFrame(() =>
 			container.classList.remove('no-marker-transition')
 		);
+	}
+}
+
+function ensureCentered() {
+	const m = map.value?.leafletObject;
+	if (!m || !followId.value) return;
+	const mapEl = m.getContainer();
+	const markerEl = mapEl.querySelector('.is-followed') as HTMLElement | null;
+	if (!markerEl) return;
+	const mapRect = mapEl.getBoundingClientRect();
+	const markerRect = markerEl.getBoundingClientRect();
+	const markerCx = markerRect.left + markerRect.width / 2;
+	const markerCy = markerRect.top + markerRect.height / 2;
+	const mapCx = mapRect.left + mapRect.width / 2;
+	const mapCy = mapRect.top + mapRect.height / 2;
+	const dx = markerCx - mapCx;
+	const dy = markerCy - mapCy;
+	if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+		m.panBy([dx, dy], { animate: false });
 	}
 }
 
@@ -156,9 +210,10 @@ function followVehicle(vehicle: Vehicle) {
 
 	const m = map.value?.leafletObject;
 	const FOLLOW_ZOOM = 18;
-	// ensure the reactive zoom prop reflects the intended follow level
 	zoom.value = Math.max(zoom.value, FOLLOW_ZOOM);
 	if (m) {
+		m.closePopup?.();
+		isCentering.value = true;
 		withNoMarkerTransitions(() => {
 			const targetZoom = Math.max(m.getZoom?.() ?? 0, FOLLOW_ZOOM);
 			m.setView([center.value[0], center.value[1]], targetZoom, {
@@ -166,8 +221,12 @@ function followVehicle(vehicle: Vehicle) {
 			});
 		});
 	}
-	nudgeIntoSafeBox();
 	userPanned.value = false;
+	openFollowPopup();
+	nextTick(() => {
+		ensureCentered();
+		isCentering.value = false;
+	});
 }
 
 function onMapReady() {
@@ -190,8 +249,9 @@ function onZoomEnd() {
 
 watch(vehicles, (list) => {
 	if (!list || !followId.value || userPanned.value) return;
-	const vehicles = list.find((v) => v.id === followId.value);
-	if (!vehicles) return;
+	const v = list.find((x) => x.id === followId.value);
+	if (!v) return;
+	openFollowPopup();
 	nudgeIntoSafeBox();
 });
 
