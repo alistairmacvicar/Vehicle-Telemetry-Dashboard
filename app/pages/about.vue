@@ -1,5 +1,5 @@
 <template>
-	<div>
+	<UCard class="vd-surface-card video-card">
 		<video
 			autoplay
 			muted
@@ -16,9 +16,19 @@
 				type="video/mp4"
 			/>
 		</video>
-	</div>
+	</UCard>
 </template>
 
 <script lang="ts" setup></script>
 
-<style></style>
+<style>
+.video-card {
+	margin: 1rem;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	overflow: hidden;
+}
+</style>
