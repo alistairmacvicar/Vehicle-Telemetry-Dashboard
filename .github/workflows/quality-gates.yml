@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
