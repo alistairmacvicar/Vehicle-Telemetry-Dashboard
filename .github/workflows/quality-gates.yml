@@ -10,8 +10,6 @@ on:
 permissions:
   contents: read
 
-env:
-  ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
 
 jobs:
   lint:
@@ -33,6 +31,8 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    env:
+      ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +47,8 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
+    env:
+      ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
