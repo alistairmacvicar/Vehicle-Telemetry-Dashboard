@@ -1,23 +1,42 @@
 <template>
 	<UApp>
-		<div class="app-grid">
+		<div class="app-root">
 			<AppHeader />
-			<div class="app-content">
+			<UMain class="page-shell">
 				<NuxtPage />
-			</div>
+			</UMain>
 		</div>
 	</UApp>
 </template>
 
+<script setup lang="ts"></script>
+
 <style>
-.app-grid {
-	min-height: 100vh;
-	display: grid;
-	grid-template-rows: auto 1fr;
+html,
+body {
+	height: 100%;
 }
 
-.app-content {
+.app-root {
+	display: grid;
+	grid-template-rows: auto 1fr;
+	height: 100dvh;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.page-shell {
 	min-height: 0;
 	height: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	padding: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+	.page-shell {
+		padding: 1rem;
+	}
 }
 </style>

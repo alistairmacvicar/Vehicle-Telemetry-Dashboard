@@ -25,7 +25,8 @@
 
 		<div
 			v-if="vehicles && vehicles.length"
-			class="sidebar-list"
+			ref="sidebarList"
+			:class="['sidebar-list', { 'is-scroll': isScrolling }]"
 		>
 			<div
 				v-for="v in vehicles"
@@ -46,7 +47,7 @@
 						<span
 							class="pulse-dot"
 							:class="{ 'is-alert': v.currentData.emergencyLights }"
-						></span>
+						/>
 					</div>
 				</div>
 
@@ -57,7 +58,7 @@
 							<div
 								class="neon-fill"
 								:style="{ width: speedPct(v) + '%' }"
-							></div>
+							/>
 						</div>
 						<div class="metric-value">
 							{{ v.currentData.speed.toFixed(0) }} km/h
@@ -116,7 +117,7 @@
 						<div
 							class="arrow"
 							:style="{ transform: 'rotate(' + v.currentData.heading + 'deg)' }"
-						></div>
+						/>
 					</div>
 					<div class="bottom-button">
 						<UButton
@@ -132,6 +133,19 @@
 						</UButton>
 					</div>
 				</div>
+
+				<div
+					v-show="hasScroll"
+					class="scrollbar-overlay"
+				>
+					<div
+						class="scrollbar-thumb"
+						:style="{
+							height: thumbSize + 'px',
+							transform: 'translateY(' + thumbOffset + 'px)',
+						}"
+					/>
+				</div>
 			</div>
 		</div>
 
@@ -139,20 +153,91 @@
 			v-else
 			class="sidebar-empty"
 		>
-			<div class="shimmer"></div>
+			<div class="shimmer" />
 			<div class="empty-text">Loading live telemetry…</div>
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue';
 import type { Vehicle } from '~~/shared/types/vehicle';
 import { useVehicles } from '~/composables/useVehicles';
 
 const { vehicles, startPolling } = useVehicles();
 onMounted(() => {
 	startPolling();
+});
+
+const sidebarList = ref<HTMLElement | null>(null);
+const isScrolling = ref(false);
+let scrollTimer: number | null = null;
+
+const hasScroll = ref(false);
+const thumbSize = ref(0);
+const thumbOffset = ref(0);
+
+function recalcScrollbar() {
+	if (!sidebarList.value) return;
+	const el = sidebarList.value;
+	const vh = el.clientHeight;
+	const sh = el.scrollHeight;
+	const lastChild = el.lastElementChild as HTMLElement | null;
+	let contentBottom = sh;
+	if (lastChild) {
+		contentBottom = lastChild.offsetTop + lastChild.offsetHeight;
+	}
+	const effectiveScrollable = Math.max(0, contentBottom - vh);
+	hasScroll.value = effectiveScrollable > 4;
+	if (!hasScroll.value) return;
+	const track = Math.max(0, vh - 8);
+	const minThumb = 24;
+	thumbSize.value = Math.min(
+		track,
+		Math.max(minThumb, (vh / contentBottom) * track)
+	);
+	const maxOffset = Math.max(0, track - thumbSize.value);
+	const rawOffset =
+		effectiveScrollable <= 0
+			? 0
+			: (el.scrollTop / effectiveScrollable) * maxOffset;
+	thumbOffset.value = Math.min(maxOffset, Math.max(0, rawOffset));
+}
+
+function onListScroll() {
+	isScrolling.value = true;
+	recalcScrollbar();
+	if (scrollTimer) window.clearTimeout(scrollTimer);
+	scrollTimer = window.setTimeout(() => {
+		isScrolling.value = false;
+	}, 600);
+}
+
+onMounted(() => {
+	if (sidebarList.value) {
+		sidebarList.value.addEventListener('scroll', onListScroll, {
+			passive: true,
+		});
+		sidebarList.value.addEventListener('mouseenter', recalcScrollbar, {
+			passive: true,
+		});
+	}
+	window.addEventListener('resize', recalcScrollbar, { passive: true });
+	nextTick(recalcScrollbar);
+});
+onUnmounted(() => {
+	if (sidebarList.value) {
+		sidebarList.value.removeEventListener(
+			'scroll',
+			onListScroll as EventListener
+		);
+		sidebarList.value.removeEventListener(
+			'mouseenter',
+			recalcScrollbar as EventListener
+		);
+	}
+	window.removeEventListener('resize', recalcScrollbar as EventListener);
+	if (scrollTimer) window.clearTimeout(scrollTimer);
 });
 
 const followVehicleId = useState<string | null>('followVehicleId', () => null);
@@ -207,10 +292,10 @@ function statusClass(v: Vehicle): string {
 
 <style scoped>
 .sidebar-root {
-	height: 100%;
+	flex: 1;
 	min-height: 0;
-	display: grid;
-	grid-template-rows: auto auto 1fr;
+	display: flex;
+	flex-direction: column;
 	gap: 0.75rem;
 	background: var(--panel-bg);
 	backdrop-filter: blur(8px);
@@ -221,6 +306,7 @@ function statusClass(v: Vehicle): string {
 		var(--outer-shadow-1),
 		var(--outer-shadow-2);
 	padding: 0.5rem;
+	max-height: 100%;
 }
 
 .sidebar-title {
@@ -290,7 +376,7 @@ function statusClass(v: Vehicle): string {
 }
 
 .sidebar-list {
-	height: 100%;
+	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
@@ -298,7 +384,42 @@ function statusClass(v: Vehicle): string {
 	grid-template-columns: 1fr;
 	justify-items: stretch;
 	gap: 0.5rem;
-	padding-right: 0;
+	position: relative;
+	scrollbar-width: none;
+}
+:deep(.sidebar-list::-webkit-scrollbar) {
+	width: 0;
+	height: 0;
+}
+
+.scrollbar-overlay {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	bottom: 4px;
+	width: 6px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease;
+	z-index: 2;
+}
+.sidebar-list:hover .scrollbar-overlay,
+.sidebar-list.is-scroll .scrollbar-overlay {
+	opacity: 1;
+}
+.scrollbar-overlay::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: rgba(148, 163, 184, 0.15);
+	border-radius: 6px;
+}
+.scrollbar-thumb {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	border-radius: 6px;
+	background: rgba(148, 163, 184, 0.6);
 }
 
 .vehicle-card {
@@ -318,14 +439,6 @@ function statusClass(v: Vehicle): string {
 	justify-self: stretch;
 	box-sizing: border-box;
 	min-width: 0;
-}
-
-.vehicle-card:hover {
-	transform: translateY(-1px);
-	box-shadow:
-		0 0 0 1px rgba(130, 160, 255, 0.2) inset,
-		0 16px 36px rgba(10, 14, 30, 0.6),
-		0 0 24px rgba(0, 224, 255, 0.2);
 }
 
 .vehicle-card.is-ok {

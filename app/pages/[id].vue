@@ -117,10 +117,10 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	display: grid;
 	grid-template-columns: 1fr 1fr 1fr 1fr;
 	grid-template-rows: 1fr 1fr 1fr 1fr;
-	height: 100%;
 	min-height: 0;
+	height: 100%;
 	gap: 1rem;
-	padding: 1rem;
+	overflow-y: auto;
 }
 
 .card-title {
@@ -145,11 +145,12 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 
 .data-container :deep(.p-4),
 .data-container :deep(.sm\:p-6) {
-	height: 100%;
+	flex: 1;
 	min-height: 0;
 	padding: 0.5rem;
-	display: grid;
-	grid-template-rows: auto 1fr;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .temp-data-container {
@@ -161,11 +162,12 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 
 .temp-data-container :deep(.p-4),
 .temp-data-container :deep(.sm\:p-6) {
-	height: 100%;
+	flex: 1;
 	min-height: 0;
 	padding: 0.5rem;
-	display: grid;
-	grid-template-rows: auto 1fr;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .two-col {
@@ -190,8 +192,11 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 
 .map-card :deep(.p-4),
 .map-card :deep(.sm\:p-6) {
-	height: 100%;
+	flex: 1;
 	min-height: 0;
 	padding: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 </style>
