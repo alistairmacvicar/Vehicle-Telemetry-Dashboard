@@ -3,21 +3,96 @@ import type { Vehicle, TelemetryData } from '~~/shared/types/vehicle.ts';
 import type { FeatureCollection, LineString } from 'geojson';
 
 const CENTER = { latitude: -34.92855422964225, longitude: 138.59985851659752 };
-const RADIUS_KM = 90;
-const NUM_VEHICLES = 5;
+const RADIUS_KM = 15; // Reduced from 90km to stay within Adelaide metro area
+const NUM_VEHICLES = 10; // Safe limit to avoid rate limiting on startup (~20 calls)
 const TICK_RATE_MS = 2000;
 const TANK_CAPACITY_L = 93;
 const MAX_HISTORY = 3600;
 const EMERGENCY_MIN_HOLD_MS = 30_000;
 const EMERGENCY_MAX_HOLD_MS = 90_000;
-const MIN_LOCAL_RANGE = 5;
-const MAX_LOCAL_RANGE = 50;
+const MIN_LOCAL_RANGE = 3; // Reduced from 5km
+const MAX_LOCAL_RANGE = 20; // Reduced from 50km to keep routes local
+
 export const vehicles: Vehicle[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastTick = Date.now();
 
 type EmergencyState = { isOn: boolean; nextChangeAt: number };
 const emergencyStates = new Map<string, EmergencyState>();
+
+// API diagnostic tracking & soft queue state
+const apiStats = {
+	snapCoordinates: { success: 0, failed: 0, errors: new Map<string, number>() },
+	directions: { success: 0, failed: 0, errors: new Map<string, number>() },
+};
+
+const API_MIN_INTERVAL_MS = 3000; // soft rate limit spacing between outbound calls (aim ~40 calls/min overall)
+const MAX_API_RETRIES = 2; // light retry to mask transient network issues
+let lastApiCallAt = 0;
+const pendingQueue: Array<() => Promise<void>> = [];
+let queueActive = false;
+// Adaptive backoff state for repeated direction failures
+let consecutiveDirectionsFailures = 0;
+// Vehicle stuck tracking: if a vehicle can't get a valid route, keep it stationary and eventually relocate
+const ROUTE_FAILURE_TIMEOUT_MS = 180_000; // 3 minutes before relocating a stuck vehicle
+const vehicleStuckState = new Map<string, { failedAt: number; retryCount: number }>();
+
+function enqueueApiWork(work: () => Promise<void>) {
+	pendingQueue.push(work);
+	processQueue();
+}
+
+async function processQueue() {
+	if (queueActive) return;
+	queueActive = true;
+	while (pendingQueue.length) {
+		const now = Date.now();
+		// Increase spacing dynamically when we have many consecutive direction failures
+		const dynamicInterval = API_MIN_INTERVAL_MS + Math.min(consecutiveDirectionsFailures * 1000, 7000);
+		const wait = Math.max(0, dynamicInterval - (now - lastApiCallAt));
+		if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+		const task = pendingQueue.shift();
+		if (!task) break;
+		lastApiCallAt = Date.now();
+		try {
+			await task();
+		} catch (e) {
+			// task itself handles logging; swallow here to keep queue flowing
+		}
+	}
+	queueActive = false;
+}
+
+function logApiError(endpoint: 'snapCoordinates' | 'directions', error: any, context?: string) {
+	const stats = apiStats[endpoint];
+	stats.failed++;
+	if (endpoint === 'directions') consecutiveDirectionsFailures++;
+	
+	const errorType = error?.statusCode 
+		? `HTTP ${error.statusCode}` 
+		: error?.message || 'Unknown error';
+	
+	stats.errors.set(errorType, (stats.errors.get(errorType) || 0) + 1);
+	
+	console.error(`❌ ${endpoint} failed:`, {
+		errorType,
+		statusCode: error?.statusCode,
+		statusMessage: error?.statusMessage,
+		message: error?.message,
+		context,
+		totalFailed: stats.failed,
+		errorCounts: Object.fromEntries(stats.errors),
+	});
+}
+
+function logApiSuccess(endpoint: 'snapCoordinates' | 'directions', context?: string) {
+	apiStats[endpoint].success++;
+	if (endpoint === 'directions') consecutiveDirectionsFailures = 0; // reset on success
+	console.log(`✅ ${endpoint} success:`, {
+		context,
+		totalSuccess: apiStats[endpoint].success,
+	});
+}
 
 function rand(min: number, max: number) {
 	return Math.random() * (max - min) + min;
@@ -240,60 +315,98 @@ function moveAlongRoute(vehicle: Vehicle, distance: number) {
 async function generateRandomRoute({
 	longitude: startLongitude,
 	latitude: startLatitude,
-}: Location) {
-	// pick an end point near the start (keep routes short and local)
-	const { longitude: endLongitude, latitude: endLatitude } =
-		await generateNearbyCoordinates(
-			{ longitude: startLongitude, latitude: startLatitude },
-			MIN_LOCAL_RANGE,
-			MAX_LOCAL_RANGE
-		);
-
-	let geoJSON: FeatureCollection<LineString> = {
-		type: 'FeatureCollection',
-		features: [
-			{
-				type: 'Feature',
-				geometry: {
-					type: 'LineString',
-					coordinates: [[startLongitude, startLatitude]],
+}: Location): Promise<{ geoJSON: FeatureCollection<LineString> } | null> {
+	const startLoc = { longitude: startLongitude, latitude: startLatitude };
+	
+	// Wrap API call with retry - if all retries fail, return null (vehicle stays stationary)
+	for (let attempt = 0; attempt <= MAX_API_RETRIES; attempt++) {
+		// pick an end point near the start (keep routes short and local), pass attempt for dynamic radius reduction
+		const { longitude: endLongitude, latitude: endLatitude } =
+			await generateNearbyCoordinates(
+				startLoc,
+				MIN_LOCAL_RANGE,
+				MAX_LOCAL_RANGE,
+				attempt
+			);
+		
+		try {
+			const result = await $fetch(`/api/route/directions`, {
+				method: 'GET',
+				query: {
+					start: `${startLongitude},${startLatitude}`,
+					end: `${endLongitude},${endLatitude}`,
 				},
-				properties: {},
-			},
-		],
-	};
-
-	try {
-		const result = await $fetch(`/api/route/directions`, {
-			method: 'GET',
-			query: {
-				start: `${startLongitude},${startLatitude}`,
-				end: `${endLongitude},${endLatitude}`,
-			},
-		});
-
-		geoJSON = result as FeatureCollection<LineString>;
-
-		console.log(
-			`Generated route from (${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}) to (${endLatitude.toFixed(5)}, ${endLongitude.toFixed(5)}) with ${getRouteCoordinates(geoJSON).length} points.`
-		);
-	} catch {
-		return { geoJSON };
+			});
+			const finalGeo = result as FeatureCollection<LineString>;
+			logApiSuccess(
+				'directions',
+				`(${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}) → (${endLatitude.toFixed(5)}, ${endLongitude.toFixed(5)}) attempt ${attempt + 1}`
+			);
+			console.log(
+				`Generated route from (${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}) to (${endLatitude.toFixed(5)}, ${endLongitude.toFixed(5)}) with ${getRouteCoordinates(finalGeo).length} points.`
+			);
+			return { geoJSON: finalGeo };
+		} catch (error: any) {
+			logApiError(
+				'directions',
+				error,
+				`start: (${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}), end: (${endLatitude.toFixed(5)}, ${endLongitude.toFixed(5)}), attempt ${attempt + 1}`
+			);
+			// If all retries exhausted, return null (vehicle will stay stationary)
+			if (attempt === MAX_API_RETRIES) {
+				console.warn(
+					`❌ All ${MAX_API_RETRIES + 1} route generation attempts failed for vehicle at (${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}). Vehicle will remain stationary.`
+				);
+				return null;
+			}
+		}
 	}
 
-	return { geoJSON };
+	return null;
 }
+
+// Regional ambulance stations across South Australia (verified road locations)
+const REGIONAL_STATIONS: Location[] = [
+	// Adelaide Metro
+	{ longitude: 138.60070, latitude: -34.92866 }, // Adelaide CBD - King William St
+	{ longitude: 138.62376, latitude: -34.92118 }, // North Adelaide - O'Connell St
+	{ longitude: 138.59851, latitude: -34.94668 }, // South Adelaide - Unley Rd
+	{ longitude: 138.58195, latitude: -34.90495 }, // West Adelaide - Port Rd
+	{ longitude: 138.63501, latitude: -34.93845 }, // East Adelaide - Magill Rd
+	
+	// Hills & Regional
+	{ longitude: 138.76234, latitude: -34.96389 }, // Mount Barker
+	{ longitude: 139.07483, latitude: -35.11949 }, // Murray Bridge
+	{ longitude: 138.52105, latitude: -34.83611 }, // Gawler
+	{ longitude: 138.73442, latitude: -34.72553 }, // Elizabeth
+	
+	// South Coast
+	{ longitude: 138.51859, latitude: -35.46970 }, // Victor Harbor
+	{ longitude: 138.68737, latitude: -35.55326 }, // Goolwa
+	
+	// North & Outback
+	{ longitude: 138.60180, latitude: -34.72998 }, // Salisbury
+	{ longitude: 137.77556, latitude: -32.49268 }, // Port Augusta
+	{ longitude: 137.20869, latitude: -31.51997 }, // Port Pirie
+	{ longitude: 135.85658, latitude: -31.57719 }, // Whyalla
+	
+	// Barossa & Mid North
+	{ longitude: 138.59167, latitude: -34.45000 }, // Tanunda (Barossa)
+	{ longitude: 138.83833, latitude: -34.11667 }, // Clare
+	
+	// Fleurieu Peninsula
+	{ longitude: 138.40833, latitude: -35.16667 }, // McLaren Vale
+	{ longitude: 138.28333, latitude: -35.61667 }, // Yankalilla
+];
+
+// Fallback locations when snap fails (Adelaide metro only, for safety)
+const FALLBACK_LOCATIONS: Location[] = REGIONAL_STATIONS.slice(0, 5);
 
 async function generateRandomCoordinates(): Promise<Location> {
 	const longitude =
 		CENTER.longitude +
 		rand(-RADIUS_KM, RADIUS_KM) / (111 * Math.cos(toRad(CENTER.latitude)));
 	const latitude = CENTER.latitude + rand(-RADIUS_KM, RADIUS_KM) / 111;
-
-	let coordinates: Location = {
-		longitude: 138.59436535241255,
-		latitude: -34.928272750293466,
-	}; //Adelaide CBD
 
 	try {
 		const response = await $fetch<Coordinates>(`/api/route/snap-coordinates`, {
@@ -304,20 +417,41 @@ async function generateRandomCoordinates(): Promise<Location> {
 			},
 		});
 
-		coordinates = { longitude: response[0], latitude: response[1] };
-	} catch {
+		const coordinates: Location = { longitude: response[0], latitude: response[1] };
+		logApiSuccess('snapCoordinates', `random: (${latitude.toFixed(5)}, ${longitude.toFixed(5)}) → (${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)})`);
 		return coordinates;
+	} catch (error) {
+		logApiError('snapCoordinates', error, `random coords: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`);
+		// Use a random known-good location instead of always Adelaide CBD
+		const fallback = FALLBACK_LOCATIONS[Math.floor(Math.random() * FALLBACK_LOCATIONS.length)];
+		console.log(`Using fallback location: (${fallback.latitude.toFixed(5)}, ${fallback.longitude.toFixed(5)})`);
+		return fallback;
 	}
-
-	return coordinates;
 }
 
 async function generateNearbyCoordinates(
 	base: Location,
 	minKm = 3,
-	maxKm = 12
+	maxKm = 12,
+	attemptNum = 0
 ): Promise<Location> {
-	const deltaKm = rand(minKm, maxKm);
+	// Dynamically reduce maxKm on repeated failures to increase chances of valid snap
+	const finalMaxKm = Math.max(minKm + 1, maxKm - attemptNum * 2);
+	
+	// Prefer local fallbacks within the same region to avoid long cross-region routes
+	const pickLocalFallback = (radiusKm = 30): Location => {
+		const nearby = REGIONAL_STATIONS
+			.filter((loc) => {
+				const d = haversineKm(base.latitude, base.longitude, loc.latitude, loc.longitude);
+				return d >= minKm && d <= radiusKm;
+			});
+		if (nearby.length > 0) {
+			return nearby[Math.floor(Math.random() * nearby.length)];
+		}
+		// As a last resort, return the base itself (the caller will generate a short route from here)
+		return base;
+	};
+	const deltaKm = rand(minKm, finalMaxKm);
 	const bearing = rand(0, 2 * Math.PI);
 	// approximate: convert local km offset to degrees around the base latitude
 	const dLat = (deltaKm * Math.cos(bearing)) / 111;
@@ -328,7 +462,7 @@ async function generateNearbyCoordinates(
 		latitude: base.latitude + dLat,
 	};
 
-	// try to snap; if snapping fails, use candidate
+	// try to snap; if snapping fails, pick a different known-good location
 	try {
 		const response = await $fetch<Coordinates>(`/api/route/snap-coordinates`, {
 			method: 'GET',
@@ -338,21 +472,33 @@ async function generateNearbyCoordinates(
 			},
 		});
 		const snapped: Location = { longitude: response[0], latitude: response[1] };
-		// if snapping jumped too far from the base (> 1.8x target max radius), keep the candidate instead
+		// if snapping jumped too far from the base (> 1.8x target max radius), reject it
 		const dist = haversineKm(
 			base.latitude,
 			base.longitude,
 			snapped.latitude,
 			snapped.longitude
 		);
-		if (dist <= maxKm * 1.8) return snapped;
-		return candidate;
-	} catch {
-		return candidate;
+		if (dist <= finalMaxKm * 1.8) {
+			logApiSuccess('snapCoordinates', `nearby: (${candidate.latitude.toFixed(5)}, ${candidate.longitude.toFixed(5)}) → (${snapped.latitude.toFixed(5)}, ${snapped.longitude.toFixed(5)})`);
+			return snapped;
+		}
+		console.warn(`Snap jumped too far: ${dist.toFixed(2)}km > ${(finalMaxKm * 1.8).toFixed(2)}km, using fallback`);
+		// Return a local known-good location within the same region when possible
+		return pickLocalFallback();
+	} catch (error) {
+		logApiError('snapCoordinates', error, `nearby coords from base (${base.latitude.toFixed(5)}, ${base.longitude.toFixed(5)}), candidate: (${candidate.latitude.toFixed(5)}, ${candidate.longitude.toFixed(5)})`);
+		// Prefer a local fallback within ~30km of the base to avoid cross-region requests
+		return pickLocalFallback();
 	}
 }
 
 async function seed(count: number) {
+	// Distribute vehicles across regions (round-robin to ensure spread)
+	const totalStations = REGIONAL_STATIONS.length;
+	
+	console.log(`🚑 Initializing ${count} vehicles sequentially to respect API rate limits...`);
+	
 	for (let i = 0; i < count; i++) {
 		const now = Date.now();
 
@@ -383,16 +529,30 @@ async function seed(count: number) {
 				atEnd: false,
 			},
 		};
-		const { longitude, latitude } = await generateRandomCoordinates();
-		vehicle.currentData.longitude = longitude;
-		vehicle.currentData.latitude = latitude;
-		console.log(`vehicle: ${vehicle.id} route generation started`);
-		const { geoJSON } = await generateRandomRoute({
-			longitude: vehicle.currentData.longitude,
-			latitude: vehicle.currentData.latitude,
-		});
+		
+		// Assign vehicle to a regional station (distributes evenly across SA)
+		const stationIndex = i % totalStations;
+		const station = REGIONAL_STATIONS[stationIndex];
+		vehicle.currentData.longitude = station.longitude;
+		vehicle.currentData.latitude = station.latitude;
+		
+		console.log(`vehicle: ${vehicle.id} assigned to station ${stationIndex + 1}/${totalStations} at (${station.latitude.toFixed(5)}, ${station.longitude.toFixed(5)})`);
+		
 
-		setVehicleRoute(vehicle.id, geoJSON);
+		// Queue route generation to avoid burst at startup
+		enqueueApiWork(async () => {
+			const result = await generateRandomRoute({
+				longitude: vehicle.currentData.longitude,
+				latitude: vehicle.currentData.latitude,
+			});
+			if (result) {
+				setVehicleRoute(vehicle.id, result.geoJSON);
+			} else {
+				// Mark vehicle as stuck if route generation failed
+				vehicleStuckState.set(vehicle.id, { failedAt: Date.now(), retryCount: 0 });
+				console.warn(`⚠️ Vehicle ${vehicle.id} could not generate initial route. Will retry.`);
+			}
+		});
 		pushTelemetry(vehicle, now, 0, 0);
 		vehicles.push(vehicle);
 
@@ -403,6 +563,8 @@ async function seed(count: number) {
 				now + Math.floor(rand(EMERGENCY_MIN_HOLD_MS, EMERGENCY_MAX_HOLD_MS)),
 		});
 	}
+	
+	console.log(`🎉 All ${count} vehicles initialized successfully across SA regions`);
 }
 
 async function tick(dtSec: number) {
@@ -466,12 +628,53 @@ async function tick(dtSec: number) {
 		moveAlongRoute(vehicle, distance);
 
 		if (vehicle.route.atEnd) {
-			const { geoJSON } = await generateRandomRoute({
-				longitude: vehicle.currentData.longitude,
-				latitude: vehicle.currentData.latitude,
-			});
-
-			setVehicleRoute(vehicle.id, geoJSON);
+			// Check if vehicle is stuck and needs relocation
+			const stuckState = vehicleStuckState.get(vehicle.id);
+			if (stuckState) {
+				const timeSinceFailure = Date.now() - stuckState.failedAt;
+				if (timeSinceFailure >= ROUTE_FAILURE_TIMEOUT_MS) {
+					// Relocate vehicle to a random metro station
+					const newStation = FALLBACK_LOCATIONS[Math.floor(Math.random() * FALLBACK_LOCATIONS.length)];
+					vehicle.currentData.latitude = newStation.latitude;
+					vehicle.currentData.longitude = newStation.longitude;
+					vehicle.currentData.speed = 0;
+					vehicleStuckState.delete(vehicle.id);
+					console.log(`🚁 Vehicle ${vehicle.id} relocated to metro station (${newStation.latitude.toFixed(5)}, ${newStation.longitude.toFixed(5)}) after ${(timeSinceFailure / 1000).toFixed(0)}s stuck`);
+				}
+			}
+			
+			// Try to generate new route with backoff
+			const retryDelayMs = 8_000;
+			const nowTime = Date.now();
+			const nextAttemptAt = (vehicle as any).nextRouteGenAt as number | undefined;
+			if (nextAttemptAt && nowTime < nextAttemptAt) {
+				// defer until nextAttemptAt, keep vehicle stationary
+				vehicle.currentData.speed = 0;
+			} else {
+				(vehicle as any).nextRouteGenAt = nowTime + retryDelayMs;
+				enqueueApiWork(async () => {
+					const result = await generateRandomRoute({
+						longitude: vehicle.currentData.longitude,
+						latitude: vehicle.currentData.latitude,
+					});
+					if (result) {
+						setVehicleRoute(vehicle.id, result.geoJSON);
+						vehicleStuckState.delete(vehicle.id); // Clear stuck state on success
+						console.log(`✅ Vehicle ${vehicle.id} successfully generated new route`);
+						// Clear scheduled attempt once successful
+						(vehicle as any).nextRouteGenAt = undefined;
+					} else {
+						// Track failure
+						const existing = vehicleStuckState.get(vehicle.id);
+						if (existing) {
+							existing.retryCount++;
+						} else {
+							vehicleStuckState.set(vehicle.id, { failedAt: nowTime, retryCount: 1 });
+						}
+						console.warn(`⚠️ Vehicle ${vehicle.id} route generation failed. Retry count: ${vehicleStuckState.get(vehicle.id)?.retryCount || 0}`);
+					}
+				});
+			}
 		}
 
 		let inst =
@@ -490,6 +693,27 @@ async function tick(dtSec: number) {
 	}
 }
 
+function printApiStats() {
+	console.log('\n📊 API Statistics Summary:');
+	console.log('  Snap Coordinates:', {
+		success: apiStats.snapCoordinates.success,
+		failed: apiStats.snapCoordinates.failed,
+		successRate: apiStats.snapCoordinates.success + apiStats.snapCoordinates.failed > 0
+			? `${((apiStats.snapCoordinates.success / (apiStats.snapCoordinates.success + apiStats.snapCoordinates.failed)) * 100).toFixed(1)}%`
+			: 'N/A',
+		errors: Object.fromEntries(apiStats.snapCoordinates.errors),
+	});
+	console.log('  Directions:', {
+		success: apiStats.directions.success,
+		failed: apiStats.directions.failed,
+		successRate: apiStats.directions.success + apiStats.directions.failed > 0
+			? `${((apiStats.directions.success / (apiStats.directions.success + apiStats.directions.failed)) * 100).toFixed(1)}%`
+			: 'N/A',
+		errors: Object.fromEntries(apiStats.directions.errors),
+	});
+	console.log('');
+}
+
 export function startSimulation(count = NUM_VEHICLES, tickMs = TICK_RATE_MS) {
 	if (timer) return;
 	seed(count);
@@ -500,6 +724,9 @@ export function startSimulation(count = NUM_VEHICLES, tickMs = TICK_RATE_MS) {
 		lastTick = now;
 		tick(dtSec);
 	}, tickMs);
+	
+	// Print API stats every 2 minutes
+	setInterval(printApiStats, 120_000);
 }
 
 export function stopSimulation() {
