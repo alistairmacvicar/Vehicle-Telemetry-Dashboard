@@ -1,7 +1,7 @@
 <template>
 	<div
 		class="map-container"
-		:class="{ dark: isDark }"
+		:class="containerClass"
 	>
 		<LMap
 			ref="map"
@@ -78,6 +78,11 @@ const isCentering = ref(false);
 
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === 'dark');
+const containerClass = ref('');
+
+function updateContainerClass() {
+	containerClass.value = colorMode.value === 'dark' ? 'dark' : '';
+}
 
 const { vehicles, startPolling, stopPolling, getVehicleById } = useVehicles();
 const POLL_INTERVAL_MS = 2000;
@@ -198,6 +203,8 @@ const geoJsonOptions = {
 
 onMounted(() => {
 	startPolling(POLL_INTERVAL_MS);
+	updateContainerClass();
+	watch(() => colorMode.value, updateContainerClass);
 });
 
 onBeforeUnmount(() => {
