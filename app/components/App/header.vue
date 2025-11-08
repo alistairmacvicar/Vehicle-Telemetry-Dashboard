@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, onMounted, watch } from 'vue';
 import brandMono from '~/assets/branding/ica_full_mono.png';
 import brandColour from '~/assets/branding/ica_full_colour.png';
 import flindersDark from '~/assets/branding/flinders_icon_dark.png';
@@ -11,15 +12,23 @@ import saAmbulanceIcon from '~/assets/branding/sa_ambulance_icon.png';
 import ciscoColour from '~/assets/branding/cisco_colour.png';
 
 const colorMode = useColorMode();
-const brandImage = computed(() =>
-	colorMode.value === 'dark' ? brandMono : brandColour
-);
-const flindersLogo = computed(() =>
-	colorMode.value === 'dark' ? flindersDark : flindersLight
-);
-const saHealthLogo = computed(() =>
-	colorMode.value === 'dark' ? saHealthDark : saHealthLight
-);
+
+const brandImage = ref(brandColour);
+const flindersLogo = ref(flindersLight);
+const saHealthLogo = ref(saHealthLight);
+
+const updateImages = () => {
+	brandImage.value = colorMode.value === 'dark' ? brandMono : brandColour;
+	flindersLogo.value =
+		colorMode.value === 'dark' ? flindersDark : flindersLight;
+	saHealthLogo.value =
+		colorMode.value === 'dark' ? saHealthDark : saHealthLight;
+};
+
+onMounted(() => {
+	updateImages();
+	watch(() => colorMode.value, updateImages);
+});
 </script>
 
 <template>
@@ -86,7 +95,7 @@ const saHealthLogo = computed(() =>
 		</template>
 		<div
 			aria-hidden="true"
-			class="absolute left-0 right-0 bottom-0 h-[2px] bg-gray-200 dark:bg-gray-800 pointer-events-none z-50"
+			class="absolute left-0 right-0 bottom-0 h-0.5 bg-gray-200 dark:bg-gray-800 pointer-events-none z-50"
 		/>
 	</UHeader>
 </template>
