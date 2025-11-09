@@ -1,5 +1,5 @@
 ---
-description: 'Playwright test generation instructions'
+description: 'Playwright-specific E2E test patterns: locators, assertions, auto-waiting, and test structure for end-to-end browser testing'
 applyTo: '**/*.{spec.ts,spec.js,test.ts,test.js,e2e.ts,e2e.js}'
 ---
 

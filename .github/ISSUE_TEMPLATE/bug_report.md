@@ -24,9 +24,10 @@ What actually happened.
 
 ## Environment
 
-- Browser & version:
+- Platform/Browser & version:
 - OS:
-- Branch / Commit:
+- Version / Branch / Commit:
+- Other relevant details:
 
 ## Logs / Console Output
 
@@ -34,11 +35,11 @@ Paste relevant excerpts (sanitize sensitive data).
 
 ## Screenshots / Video
 
-(If UI-related.)
+(If applicable.)
 
 ## Impact
 
-Severity and scope (single vehicle, whole fleet, etc.).
+Severity and scope (e.g., affects all users, specific feature, development only).
 
 ## Possible Cause (Optional)
 

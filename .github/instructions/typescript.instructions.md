@@ -3,6 +3,8 @@ description: 'Guidelines for TypeScript Development targeting TypeScript 5.x and
 applyTo: '**/*.ts'
 ---
 
+<!-- Related Instructions: #file:security-and-owasp.instructions.md | #file:testing.instructions.md | #file:playwright-typescript.instructions.md | #file:performance-optimization.instructions.md -->
+
 # TypeScript Development
 
 > These instructions assume projects are built with TypeScript 5.x (or newer) compiling to an ES2022 JavaScript baseline. Adjust guidance if your runtime requires older language targets or down-level transpilation.
@@ -66,20 +68,16 @@ applyTo: '**/*.ts'
 ## External Integrations
 
 - Instantiate clients outside hot paths and inject them for testability.
-- Never hardcode secrets; load them from secure sources.
 - Apply retries, backoff, and cancellation to network or IO calls.
 - Normalize external responses and map errors to domain shapes.
 
 ## Security Practices
 
-- Validate and sanitize external input with schema validators or type guards.
-- Avoid dynamic code execution and untrusted template rendering.
-- Encode untrusted content before rendering HTML; use framework escaping or trusted types.
-- Use parameterized queries or prepared statements to block injection.
-- Keep secrets in secure storage, rotate them regularly, and request least-privilege scopes.
-- Favor immutable flows and defensive copies for sensitive data.
-- Use vetted crypto libraries only.
-- Patch dependencies promptly and monitor advisories.
+**TypeScript-Specific Security Notes**:
+
+- Use type guards and schema validators (Zod, io-ts) for runtime validation at API boundaries
+- Leverage TypeScript's type system to enforce security constraints at compile time
+- Never use `any` type for user input; prefer `unknown` with proper narrowing
 
 ## Configuration & Secrets
 
@@ -95,17 +93,24 @@ applyTo: '**/*.ts'
 
 ## Testing Expectations
 
-- Add or update unit tests with the project's framework and naming style.
-- Expand integration or end-to-end suites when behavior crosses modules or platform APIs.
-- Run targeted test scripts for quick feedback before submitting.
-- Avoid brittle timing assertions; prefer fake timers or injected clocks.
+**TypeScript-Specific Testing Notes**:
+
+- Use the project's testing framework (Jest, Vitest, etc.) and match existing naming conventions
+- Leverage TypeScript's type system in tests - avoid `any`, use proper type assertions
+- Use type-safe mocking libraries that preserve TypeScript types
+- For Playwright E2E tests, see #file:playwright-typescript.instructions.md
+- Prefer fake timers (`jest.useFakeTimers()`) over `setTimeout` in tests for time-dependent code
 
 ## Performance & Reliability
 
-- Lazy-load heavy dependencies and dispose them when done.
-- Defer expensive work until users need it.
-- Batch or debounce high-frequency events to reduce thrash.
-- Track resource lifetimes to prevent leaks.
+**TypeScript-Specific Performance Notes**:
+
+- Lazy-load heavy dependencies and dispose them when done
+- Use TypeScript's type narrowing to avoid runtime type checks
+- Prefer `const` enum for eliminated runtime overhead (when appropriate)
+- Avoid excessive use of decorators and reflection (significant runtime cost)
+- Use `as const` for literal types to enable better tree-shaking
+- Track resource lifetimes to prevent memory leaks (event listeners, timers, subscriptions)
 
 ## Documentation & Comments
 
