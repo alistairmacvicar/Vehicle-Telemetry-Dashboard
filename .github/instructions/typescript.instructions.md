@@ -3,8 +3,6 @@ description: 'Guidelines for TypeScript Development targeting TypeScript 5.x and
 applyTo: '**/*.ts'
 ---
 
-<!-- Related Instructions: #file:security-and-owasp.instructions.md | #file:testing.instructions.md | #file:playwright-typescript.instructions.md | #file:performance-optimization.instructions.md -->
-
 # TypeScript Development
 
 > These instructions assume projects are built with TypeScript 5.x (or newer) compiling to an ES2022 JavaScript baseline. Adjust guidance if your runtime requires older language targets or down-level transpilation.
@@ -98,7 +96,6 @@ applyTo: '**/*.ts'
 - Use the project's testing framework (Jest, Vitest, etc.) and match existing naming conventions
 - Leverage TypeScript's type system in tests - avoid `any`, use proper type assertions
 - Use type-safe mocking libraries that preserve TypeScript types
-- For Playwright E2E tests, see #file:playwright-typescript.instructions.md
 - Prefer fake timers (`jest.useFakeTimers()`) over `setTimeout` in tests for time-dependent code
 
 ## Performance & Reliability
