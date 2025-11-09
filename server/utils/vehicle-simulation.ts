@@ -1,9 +1,7 @@
 import type { Coordinates, Location } from '~~/shared/types/geo.ts';
 import type { Vehicle, TelemetryData } from '~~/shared/types/vehicle.ts';
-import type { FeatureCollection, LineString } from 'geojson';
+import type { Feature, FeatureCollection, GeoJsonProperties, LineString } from 'geojson';
 
-const CENTER = { latitude: -34.92855422964225, longitude: 138.59985851659752 };
-const RADIUS_KM = 15; // Reduced from 90km to stay within Adelaide metro area
 const NUM_VEHICLES = 10; // Safe limit to avoid rate limiting on startup (~20 calls)
 const TICK_RATE_MS = 2000;
 const TANK_CAPACITY_L = 93;
@@ -57,29 +55,68 @@ async function processQueue() {
     lastApiCallAt = Date.now();
     try {
       await task();
-    } catch (e) {
+    } catch {
       // task itself handles logging; swallow here to keep queue flowing
     }
   }
   queueActive = false;
 }
 
-function logApiError(endpoint: 'snapCoordinates' | 'directions', error: any, context?: string) {
+// Safely format different error shapes we may receive from $fetch / server
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+function formatError(err: unknown) {
+  let statusCode: number | undefined;
+  let statusMessage: string | undefined;
+  let message: string | undefined;
+  let name: string | undefined;
+  let code: string | number | undefined;
+
+  if (err instanceof Error) {
+    message = err.message;
+    name = err.name;
+  }
+
+  if (isObject(err)) {
+    // treat the error as a generic record to avoid `any`
+    const rec = err as Record<string, unknown>;
+    // common properties from FetchError / H3Error / libraries
+    if (typeof rec.statusCode === 'number') statusCode = rec.statusCode as number;
+    if (typeof rec.status === 'number') statusCode = rec.status as number;
+    if (typeof rec.statusMessage === 'string') statusMessage = rec.statusMessage as string;
+    if (typeof rec.message === 'string') message = message || (rec.message as string);
+    if (typeof rec.name === 'string') name = name || (rec.name as string);
+    if (typeof rec.code === 'string' || typeof rec.code === 'number')
+      code = rec.code as string | number;
+
+    // some fetch errors expose the response object
+    const resp = rec.response;
+    if (isObject(resp)) {
+      const r = resp as Record<string, unknown>;
+      if (typeof r.status === 'number') statusCode = statusCode ?? (r.status as number);
+      if (typeof r.statusText === 'string')
+        statusMessage = statusMessage ?? (r.statusText as string);
+    }
+  }
+
+  const errorType = statusCode
+    ? `HTTP ${statusCode}`
+    : message || name || String(code) || 'Unknown error';
+  return { errorType, statusCode, statusMessage, message, name, code };
+}
+
+function logApiError(endpoint: 'snapCoordinates' | 'directions', error: unknown, context?: string) {
   const stats = apiStats[endpoint];
   stats.failed++;
   if (endpoint === 'directions') consecutiveDirectionsFailures++;
 
-  const errorType = error?.statusCode
-    ? `HTTP ${error.statusCode}`
-    : error?.message || 'Unknown error';
-
-  stats.errors.set(errorType, (stats.errors.get(errorType) || 0) + 1);
+  const info = formatError(error);
+  stats.errors.set(info.errorType, (stats.errors.get(info.errorType) || 0) + 1);
 
   console.error(`❌ ${endpoint} failed:`, {
-    errorType,
-    statusCode: error?.statusCode,
-    statusMessage: error?.statusMessage,
-    message: error?.message,
+    ...info,
     context,
     totalFailed: stats.failed,
     errorCounts: Object.fromEntries(stats.errors),
@@ -185,14 +222,14 @@ function getRouteCoordinates(geoJSON: FeatureCollection<LineString>): Coordinate
 }
 
 function buildSpeedProfileFromRoute(geoJSON: FeatureCollection<LineString>) {
-  const feature = geoJSON?.features?.[0] as any;
-  const properties = feature?.properties as any;
-  const segments = properties?.segments as any[] | undefined;
+  const feature = geoJSON?.features?.[0] as Feature;
+  const properties = feature?.properties as GeoJsonProperties;
+  const segments = properties?.segments as unknown;
   const profile: Array<{ from: number; to: number; speedKmh: number }> = [];
 
   if (Array.isArray(segments)) {
-    for (const seg of segments) {
-      const steps = seg?.steps as any[] | undefined;
+    for (const segment of segments) {
+      const steps = segment?.steps as unknown;
       if (!Array.isArray(steps)) continue;
       for (const step of steps) {
         const wayPoints = step?.way_points as [number, number] | undefined;
@@ -320,7 +357,7 @@ async function generateRandomRoute({
         `Generated route from (${startLatitude.toFixed(5)}, ${startLongitude.toFixed(5)}) to (${endLatitude.toFixed(5)}, ${endLongitude.toFixed(5)}) with ${getRouteCoordinates(finalGeo).length} points.`,
       );
       return { geoJSON: finalGeo };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logApiError(
         'directions',
         error,
@@ -375,44 +412,6 @@ const REGIONAL_STATIONS: Location[] = [
 
 // Fallback locations when snap fails (Adelaide metro only, for safety)
 const FALLBACK_LOCATIONS: Location[] = REGIONAL_STATIONS.slice(0, 5);
-
-async function generateRandomCoordinates(): Promise<Location> {
-  const longitude =
-    CENTER.longitude + rand(-RADIUS_KM, RADIUS_KM) / (111 * Math.cos(toRad(CENTER.latitude)));
-  const latitude = CENTER.latitude + rand(-RADIUS_KM, RADIUS_KM) / 111;
-
-  try {
-    const response = await $fetch<Coordinates>(`/api/route/snap-coordinates`, {
-      method: 'GET',
-      query: {
-        longitude: longitude,
-        latitude: latitude,
-      },
-    });
-
-    const coordinates: Location = {
-      longitude: response[0],
-      latitude: response[1],
-    };
-    logApiSuccess(
-      'snapCoordinates',
-      `random: (${latitude.toFixed(5)}, ${longitude.toFixed(5)}) → (${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)})`,
-    );
-    return coordinates;
-  } catch (error) {
-    logApiError(
-      'snapCoordinates',
-      error,
-      `random coords: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`,
-    );
-    // Use a random known-good location instead of always Adelaide CBD
-    const fallback = FALLBACK_LOCATIONS[Math.floor(Math.random() * FALLBACK_LOCATIONS.length)];
-    console.log(
-      `Using fallback location: (${fallback.latitude.toFixed(5)}, ${fallback.longitude.toFixed(5)})`,
-    );
-    return fallback;
-  }
-}
 
 async function generateNearbyCoordinates(
   base: Location,
@@ -635,12 +634,12 @@ async function tick(dtSec: number) {
       // Try to generate new route with backoff
       const retryDelayMs = 8_000;
       const nowTime = Date.now();
-      const nextAttemptAt = (vehicle as any).nextRouteGenAt as number | undefined;
+      const nextAttemptAt = vehicle.nextRouteGenAt;
       if (nextAttemptAt && nowTime < nextAttemptAt) {
         // defer until nextAttemptAt, keep vehicle stationary
         vehicle.currentData.speed = 0;
       } else {
-        (vehicle as any).nextRouteGenAt = nowTime + retryDelayMs;
+        vehicle.nextRouteGenAt = nowTime + retryDelayMs;
         enqueueApiWork(async () => {
           const result = await generateRandomRoute({
             longitude: vehicle.currentData.longitude,
@@ -651,7 +650,7 @@ async function tick(dtSec: number) {
             vehicleStuckState.delete(vehicle.id); // Clear stuck state on success
             console.log(`✅ Vehicle ${vehicle.id} successfully generated new route`);
             // Clear scheduled attempt once successful
-            (vehicle as any).nextRouteGenAt = undefined;
+            vehicle.nextRouteGenAt = undefined;
           } else {
             // Track failure
             const existing = vehicleStuckState.get(vehicle.id);
