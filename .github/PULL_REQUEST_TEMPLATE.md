@@ -14,34 +14,40 @@ Describe the change clearly and link any related issue.
 
 ### Code Quality
 
+- [ ] N/A - No code changes
 - [ ] Small, focused diff (< ~400 LOC or justified)
-- [ ] Follows existing patterns (Nuxt 3 / Vue 3 composition, composables for shared state)
+- [ ] Follows existing patterns and conventions in the codebase
 - [ ] No unsolicited refactors outside scope
 
 ### Security
 
-- [ ] All new API inputs validated with Zod (`server/api/*`)
+- [ ] N/A - No security-relevant changes
+- [ ] All new inputs validated (API endpoints, user inputs, external data)
 - [ ] No secrets added / hardcoded
-- [ ] No unsafe HTML injection (`innerHTML`) without sanitization rationale
+- [ ] No unsafe operations (HTML injection, command execution, file access) without sanitization rationale
 
 ### Performance
 
-- [ ] Avoids recreating heavy objects/reactive state in hot paths
-- [ ] Charts use shared utilities in `lib/util/echarts.ts`
-- [ ] Large loops or high-frequency watchers justified
+- [ ] N/A - No performance impact
+- [ ] Avoids recreating heavy objects or state in hot paths
+- [ ] Reuses shared utilities and helper functions where applicable
+- [ ] Large loops, recursive operations, or high-frequency operations justified
 
 ### Testing
 
-- [ ] Added/updated tests (Playwright/E2E or unit) OR checked "No impact" below
-- [ ] [ ] No impact (explain why)
+- [ ] N/A - No testable changes (docs, comments, etc.)
+- [ ] Added/updated tests (unit, integration, or E2E)
+- [ ] Manually tested (describe below)
 
 ### Documentation
 
-- [ ] Public API or composable changes documented
-- [ ] README / inline intent comments updated where needed
+- [ ] N/A - No documentation needed
+- [ ] Public API, interface, or shared module changes documented
+- [ ] README or inline comments updated where needed
 
 ### Observability & Errors
 
+- [ ] N/A - No error handling changes
 - [ ] Error paths use existing patterns (structured, not silent)
 
 ## Screenshots / Evidence (if UI)
