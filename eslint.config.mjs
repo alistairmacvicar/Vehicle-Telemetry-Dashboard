@@ -5,7 +5,7 @@ import nPlugin from 'eslint-plugin-n';
 
 export default withNuxt(js.configs.recommended, nPlugin.configs['flat/recommended'], {
   rules: {
-    // Disabled due to internal crash in @typescript-eslint/eslint-plugin@8.46.2
+    // Disabled due to internal crash in @typescript-eslint/eslint-plugin@8.46.3
     // when processing Vue SFC files with ECharts option objects
     '@typescript-eslint/unified-signatures': 'off',
     'vue/html-self-closing': [

@@ -13,7 +13,7 @@ export default function tryParseEnv<T extends ZodRawShape>(
     if (error instanceof ZodError) {
       let message = 'Missing required values in .env:\n';
       error.issues.forEach((issue) => {
-        message += `${String(issue.path[0])}\n`;
+        message += `${issue.path[0]?.toString() ?? 'unknown'}\n`;
       });
       const e = new Error(message);
       e.stack = '';

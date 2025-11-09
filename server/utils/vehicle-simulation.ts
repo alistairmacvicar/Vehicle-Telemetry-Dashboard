@@ -224,7 +224,12 @@ function getRouteCoordinates(geoJSON: FeatureCollection<LineString>): Coordinate
 function buildSpeedProfileFromRoute(geoJSON: FeatureCollection<LineString>) {
   const feature = geoJSON?.features?.[0] as Feature;
   const properties = feature?.properties as GeoJsonProperties;
-  const segments = properties?.segments as unknown;
+  // geojson segments aren't strongly typed
+  function isArrayOfObjects(value: unknown): value is Record<string, unknown>[] {
+    return Array.isArray(value) && value.every((v) => isObject(v));
+  }
+
+  const segments = isArrayOfObjects(properties?.segments) ? properties.segments : undefined;
   const profile: Array<{ from: number; to: number; speedKmh: number }> = [];
 
   if (Array.isArray(segments)) {
