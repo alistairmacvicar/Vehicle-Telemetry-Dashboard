@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import tryParseEnv from './try-parse-env';
 
-const EnvSchema = z.object({
-	NODE_ENV: z.string(),
-	ORS_API_KEY: z.string(),
+const env = z.object({
+  NODE_ENV: z.string(),
+  ORS_API_KEY: z.string(),
 });
 
-export type EnvSchema = z.infer<typeof EnvSchema>;
+export type EnvSchema = z.infer<typeof env>;
 
-tryParseEnv(EnvSchema);
+tryParseEnv(env);
 
-export default EnvSchema.parse(process.env);
+// eslint-disable-next-line n/no-process-env -- Validated with Zod schema
+export default env.parse(process.env);
