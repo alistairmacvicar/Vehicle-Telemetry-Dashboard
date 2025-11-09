@@ -1,5 +1,8 @@
 name: Lint
 
+env:
+  ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
+
 on:
   pull_request:
 
