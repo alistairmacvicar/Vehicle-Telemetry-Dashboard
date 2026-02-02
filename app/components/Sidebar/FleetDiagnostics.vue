@@ -290,7 +290,7 @@ function statusClass(vehicle: Vehicle): string {
   border: 1px solid var(--border-color);
   box-shadow:
     0 0 0 1px var(--inset-outline) inset,
-    0 6px 16px rgba(10, 14, 30, 0.4);
+    0 2px 2px rgba(10, 14, 30, 0.4);
   display: grid;
   grid-template-rows: auto 1fr;
   align-content: center;
@@ -383,18 +383,10 @@ function statusClass(vehicle: Vehicle): string {
 }
 .vehicle-card.is-warn {
   border-color: rgba(255, 200, 60, 0.45);
-  box-shadow:
-    0 0 0 1px rgba(255, 200, 60, 0.15) inset,
-    0 12px 26px rgba(10, 14, 30, 0.55),
-    0 0 16px rgba(255, 200, 60, 0.18);
 }
 .vehicle-card.is-critical,
 .vehicle-card.is-alert {
   border-color: rgba(255, 70, 70, 0.5);
-  box-shadow:
-    0 0 0 1px rgba(255, 70, 70, 0.18) inset,
-    0 12px 28px rgba(10, 14, 30, 0.6),
-    0 0 20px rgba(255, 70, 70, 0.22);
 }
 
 .vehicle-header {
