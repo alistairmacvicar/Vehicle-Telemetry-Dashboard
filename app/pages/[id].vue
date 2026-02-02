@@ -50,6 +50,9 @@
 			</div>
 			<ChartsEmergencyTimeline :lights-series="lightsSeries" />
 		</UCard>
+		<div>
+			
+		</div>
 
 		<UCard class="temp-data-container vd-surface-card">
 			<div class="card-title">
@@ -129,11 +132,11 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	display: flex;
 	align-items: center;
 	gap: 0.35rem;
+	flex-shrink: 0;
 }
 
 .title-icon {
-	color: #9db6ff;
-	filter: drop-shadow(0 0 6px rgba(150, 200, 255, 0.35));
+	color: #6b7280;
 }
 
 .data-container {
@@ -141,6 +144,8 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	background: transparent;
 	height: 100%;
 	grid-row: span 2;
+	display: flex;
+	flex-direction: column;
 }
 
 .data-container :deep(.p-4),
@@ -153,11 +158,18 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	overflow: hidden;
 }
 
+.data-container :deep(.chart-root) {
+	flex: 1;
+	min-height: 0;
+}
+
 .temp-data-container {
 	width: 100%;
 	height: 100%;
 	grid-row: 3 / 5;
 	grid-column: 3 /5;
+	display: flex;
+	flex-direction: column;
 }
 
 .temp-data-container :deep(.p-4),
@@ -168,6 +180,11 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+.temp-data-container :deep(.chart-root) {
+	flex: 1;
+	min-height: 0;
 }
 
 .two-col {
@@ -188,6 +205,8 @@ const selectedVehicle = computed<Vehicle | null>(() => {
 .map-card {
 	width: 100%;
 	height: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 .map-card :deep(.p-4),

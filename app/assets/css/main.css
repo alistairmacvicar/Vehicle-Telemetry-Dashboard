@@ -63,13 +63,11 @@
 .vd-glow-ambient {
 	box-shadow:
 		var(--card-shadow),
-		0 0 18px rgba(80, 170, 255, 0.08),
 		0 12px 28px rgba(15, 23, 42, 0.06);
 }
 .dark .vd-glow-ambient {
 	box-shadow:
 		var(--card-shadow),
-		0 0 24px rgba(0, 224, 255, 0.18),
 		0 16px 36px rgba(10, 14, 30, 0.55);
 }
 
@@ -86,13 +84,8 @@
 	background:
 		radial-gradient(
 			120% 60% at 50% 0%,
-			rgba(0, 224, 255, 0.12),
-			transparent 60%
-		),
-		radial-gradient(
-			100% 50% at 100% 100%,
-			rgba(155, 107, 255, 0.08),
-			transparent 60%
+			rgba(59, 130, 246, 0.08),
+			transparent 70%
 		);
 	filter: blur(14px);
 	z-index: 0;
@@ -106,13 +99,8 @@
 	background:
 		radial-gradient(
 			120% 60% at 50% 0%,
-			rgba(0, 224, 255, 0.18),
-			transparent 60%
-		),
-		radial-gradient(
-			100% 50% at 100% 100%,
-			rgba(155, 107, 255, 0.12),
-			transparent 60%
+			rgba(59, 130, 246, 0.12),
+			transparent 70%
 		);
 	filter: blur(18px);
 }

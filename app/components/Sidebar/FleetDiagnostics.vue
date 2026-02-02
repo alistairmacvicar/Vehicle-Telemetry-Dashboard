@@ -267,17 +267,12 @@ function statusClass(vehicle: Vehicle): string {
 .title-glow {
   font-weight: 700;
   letter-spacing: 0.04em;
-  background: linear-gradient(90deg, #7aa8ff, #9b6bff, #00e0ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 12px rgba(80, 170, 255, 0.35);
+  color: #3b82f6;
 }
 
 .title-icon {
   font-size: 1.25rem;
-  color: #8fb0ff;
-  filter: drop-shadow(0 0 6px rgba(80, 170, 255, 0.4));
+  color: #6b7280;
 }
 
 .sidebar-summary {
@@ -291,9 +286,7 @@ function statusClass(vehicle: Vehicle): string {
   position: relative;
   border-radius: 0.5rem;
   padding: 0.5rem;
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(0, 224, 255, 0.18), rgba(0, 0, 0, 0) 60%),
-    linear-gradient(180deg, var(--muted-start), var(--muted-end));
+  background: linear-gradient(180deg, var(--muted-start), var(--muted-end));
   border: 1px solid var(--border-color);
   box-shadow:
     0 0 0 1px var(--inset-outline) inset,
@@ -419,8 +412,7 @@ function statusClass(vehicle: Vehicle): string {
 }
 
 .vehicle-icon {
-  color: #9db6ff;
-  filter: drop-shadow(0 0 6px rgba(150, 200, 255, 0.35));
+  color: #6b7280;
 }
 
 .status-pill {
@@ -507,8 +499,8 @@ function statusClass(vehicle: Vehicle): string {
 .neon-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #00e0ff, #9b6bff);
-  box-shadow: 0 0 12px rgba(0, 224, 255, 0.65);
+  background: #3b82f6;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
   transition: width 300ms ease;
 }
 
@@ -519,13 +511,13 @@ function statusClass(vehicle: Vehicle): string {
   height: var(--size);
   border-radius: 50%;
   background:
-    conic-gradient(#00e0ff calc(var(--p) * 1%), var(--donut-track) 0),
+    conic-gradient(#3b82f6 calc(var(--p) * 1%), var(--donut-track) 0),
     radial-gradient(
       circle at 50% 50%,
       var(--donut-inner) calc(50% - var(--thickness)),
       transparent calc(50% - var(--thickness) + 1px)
     );
-  box-shadow: 0 0 16px rgba(0, 224, 255, 0.35);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
   position: relative;
 }
 .fuel-center {
